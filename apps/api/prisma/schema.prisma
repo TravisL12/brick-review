@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A LEGO set the user owns / has declared.
+model LegoSet {
+  id           String    @id @default(cuid())
+  /// Canonical Rebrickable set number, always suffixed: "10276-1"
+  setNum       String    @unique
+  name         String?
+  year         Int?
+  themeId      Int?
+  themeName    String?
+  numParts     Int?
+  imgUrl       String?
+  /// pending | syncing | ready | error
+  syncStatus   String    @default("pending")
+  syncError    String?
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  parts SetPart[]
+
+  @@index([syncStatus])
+}
+
+/// One line of a set's parts inventory.
+model SetPart {
+  id        String  @id @default(cuid())
+  setId     String
+  set       LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  /// Rebrickable part number, e.g. "3001"
+  partNum   String
+  name      String?
+  imgUrl    String?
+  colorId   Int?
+  colorName String?
+  colorHex  String?
+  quantity  Int     @default(1)
+  isSpare   Boolean @default(false)
+  elementId String?
+
+  @@unique([setId, partNum, colorId, isSpare])
+  @@index([partNum])
+  @@index([setId])
+}
+
+/// Maps an external catalog id (BrickLink / LEGO / BrickOwl) to a Rebrickable part number.
+/// Brickognize returns BrickLink-style ids, so this is the join bridge.
+model PartAlias {
+  id         String @id @default(cuid())
+  /// "BrickLink" | "LEGO" | "BrickOwl" | "Rebrickable" | ...
+  source     String
+  externalId String
+  partNum    String
+
+  @@unique([source, externalId, partNum])
+  @@index([externalId])
+  @@index([partNum])
+}
+
+/// Audit trail of recognitions, so we can improve matching / send feedback later.
+model ScanEvent {
+  id          String   @id @default(cuid())
+  listingId   String?
+  /// part | set | fig | sticker
+  searchType  String
+  /// JSON blob of the raw Brickognize candidate list
+  candidates  String
+  topPartNum  String?
+  topScore    Float?
+  matchedSets String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}

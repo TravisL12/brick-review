@@ -1,0 +1,23 @@
+{
+  "name": "brick-review",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"yarn dev:api\" \"yarn dev:web\"",
+    "dev:api": "yarn workspace @brick-review/api dev",
+    "dev:web": "yarn workspace @brick-review/web dev",
+    "build": "yarn workspace @brick-review/api build && yarn workspace @brick-review/web build",
+    "db:push": "yarn workspace @brick-review/api db:push",
+    "db:studio": "yarn workspace @brick-review/api db:studio",
+    "postinstall": "yarn workspace @brick-review/api prisma:generate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
