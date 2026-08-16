@@ -126,7 +126,7 @@ export class SetsService implements OnModuleInit {
     });
     if (!set) throw new NotFoundException(`Set ${setNum} is not in the collection`);
 
-    return this.prisma.setPart.findMany({
+    const parts = await this.prisma.setPart.findMany({
       where: { setId: set.id },
       orderBy: [{ isSpare: 'asc' }, { quantity: 'desc' }, { partNum: 'asc' }],
       select: {
@@ -142,6 +142,79 @@ export class SetsService implements OnModuleInit {
         elementId: true,
       },
     });
+
+    await this.ensureColorAliases();
+
+    // BrickLink uses its own part and colour ids; resolve both so links land correctly.
+    const partNums = [...new Set(parts.map((p) => p.partNum))];
+    const blPartIds = new Map<string, string>();
+    for (let i = 0; i < partNums.length; i += CHUNK) {
+      const aliases = await this.prisma.partAlias.findMany({
+        where: { source: 'BrickLink', partNum: { in: partNums.slice(i, i + CHUNK) } },
+        select: { partNum: true, externalId: true },
+        orderBy: { externalId: 'asc' },
+      });
+      for (const alias of aliases) {
+        if (!blPartIds.has(alias.partNum)) blPartIds.set(alias.partNum, alias.externalId);
+      }
+    }
+
+    const colorIds = [...new Set(parts.map((p) => p.colorId).filter((c): c is number => c != null))];
+    const blColorIds = new Map<number, number>();
+    if (colorIds.length > 0) {
+      const colors = await this.prisma.colorAlias.findMany({
+        where: { id: { in: colorIds }, bricklinkId: { not: null } },
+        select: { id: true, bricklinkId: true },
+      });
+      for (const color of colors) {
+        if (color.bricklinkId != null) blColorIds.set(color.id, color.bricklinkId);
+      }
+    }
+
+    return parts.map((part) => {
+      const blPart = blPartIds.get(part.partNum);
+      const blColor = part.colorId != null ? blColorIds.get(part.colorId) : undefined;
+      return {
+        ...part,
+        bricklinkId: blPart ?? null,
+        links: {
+          // Rebrickable redirects /parts/{id}/ to its canonical slug, and ignores a
+          // colour segment, so link the plain part page.
+          rebrickable: `https://rebrickable.com/parts/${encodeURIComponent(part.partNum)}/`,
+          bricklink: blPart
+            ? `https://www.bricklink.com/v2/catalog/catalogitem.page?P=${encodeURIComponent(
+                blPart,
+              )}${blColor != null ? `&idColor=${blColor}` : ''}`
+            : null,
+        },
+      };
+    });
+  }
+
+  /**
+   * Populates the Rebrickable -> BrickLink colour map. One API call, stored once;
+   * failures are non-fatal because links degrade to part-only.
+   */
+  private async ensureColorAliases(): Promise<void> {
+    if (!this.rebrickable.isConfigured()) return;
+    const known = await this.prisma.colorAlias.count();
+    if (known > 0) return;
+
+    try {
+      const colors = await this.rebrickable.getColors();
+      const rows = colors.map((color) => ({
+        id: color.id,
+        name: color.name,
+        rgb: color.rgb ?? null,
+        bricklinkId: color.external_ids?.BrickLink?.ext_ids?.[0] ?? null,
+      }));
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        await this.prisma.colorAlias.createMany({ data: rows.slice(i, i + CHUNK) });
+      }
+      this.logger.log(`Cached ${rows.length} colour aliases`);
+    } catch (err) {
+      this.logger.warn(`Could not cache colour aliases: ${String(err)}`);
+    }
   }
 
   async remove(setNum: string) {

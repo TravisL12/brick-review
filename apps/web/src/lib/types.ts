@@ -4,6 +4,7 @@ export interface LegoSet {
   name: string | null;
   year: number | null;
   themeId: number | null;
+  themeName: string | null;
   numParts: number | null;
   imgUrl: string | null;
   syncStatus: 'pending' | 'syncing' | 'ready' | 'error';
@@ -11,6 +12,37 @@ export interface LegoSet {
   lastSyncedAt: string | null;
   createdAt: string;
   inventoryLines: number;
+}
+
+export interface SetSummary {
+  inventoryLines: number;
+  totalPieces: number;
+  distinctParts: number;
+  distinctColors: number;
+  spareLines: number;
+  sparePieces: number;
+}
+
+export interface SetDetail extends Omit<LegoSet, 'inventoryLines'> {
+  summary: SetSummary;
+}
+
+export interface InventoryPart {
+  id: string;
+  partNum: string;
+  name: string | null;
+  imgUrl: string | null;
+  colorId: number | null;
+  colorName: string | null;
+  colorHex: string | null;
+  quantity: number;
+  isSpare: boolean;
+  elementId: string | null;
+  bricklinkId: string | null;
+  links: {
+    rebrickable: string;
+    bricklink: string | null;
+  };
 }
 
 export interface SetsStats {

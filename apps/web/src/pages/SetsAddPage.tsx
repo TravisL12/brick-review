@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { api } from '../lib/api';
 import type { ImportResult, LegoSet, SetsStats } from '../lib/types';
 
@@ -10,13 +12,14 @@ const PLACEHOLDER = `Paste set numbers any way you like:
 
 The "-1" variant suffix is added automatically.`;
 
-export function SetsPage() {
+export function SetsAddPage() {
   const [sets, setSets] = useState<LegoSet[]>([]);
   const [stats, setStats] = useState<SetsStats | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastImport, setLastImport] = useState<ImportResult | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<LegoSet | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -65,7 +68,7 @@ export function SetsPage() {
     setText((prev) => (prev ? `${prev}\n${content}` : content));
   }
 
-  async function act(fn: () => Promise<unknown>) {
+  async function act(fn: () => Promise<unknown>): Promise<void> {
     setBusy(true);
     setError(null);
     try {
@@ -157,7 +160,7 @@ export function SetsPage() {
       )}
 
       <section className="card">
-        <h2>Collection ({sets.length})</h2>
+        <h2>Recently added ({sets.length})</h2>
         {sets.length === 0 ? (
           <p className="muted">Nothing yet — add a few set numbers above.</p>
         ) : (
@@ -171,7 +174,9 @@ export function SetsPage() {
                 )}
                 <div className="set-info">
                   <div className="set-title">
-                    <strong>{set.setNum}</strong>
+                    <Link to={`/sets/${encodeURIComponent(set.setNum)}`}>
+                      <strong>{set.setNum}</strong>
+                    </Link>
                     <span>{set.name ?? '—'}</span>
                   </div>
                   <div className="set-meta">
@@ -188,11 +193,7 @@ export function SetsPage() {
                   <button onClick={() => void act(() => api.resyncSet(set.setNum))} disabled={busy}>
                     Resync
                   </button>
-                  <button
-                    className="danger"
-                    onClick={() => void act(() => api.removeSet(set.setNum))}
-                    disabled={busy}
-                  >
+                  <button className="danger" onClick={() => setPendingRemove(set)} disabled={busy}>
                     Remove
                   </button>
                 </div>
@@ -201,6 +202,19 @@ export function SetsPage() {
           </ul>
         )}
       </section>
+
+      {pendingRemove && (
+        <ConfirmDialog
+          title={`Remove ${pendingRemove.name ?? pendingRemove.setNum}?`}
+          message={`${pendingRemove.setNum} and its ${pendingRemove.inventoryLines.toLocaleString()} inventory lines will be deleted from your collection. Scans will no longer match against it. You can add it again later, which re-downloads the inventory.`}
+          busy={busy}
+          onConfirm={() => {
+            const setNum = pendingRemove.setNum;
+            void act(() => api.removeSet(setNum)).finally(() => setPendingRemove(null));
+          }}
+          onCancel={() => setPendingRemove(null)}
+        />
+      )}
     </div>
   );
 }

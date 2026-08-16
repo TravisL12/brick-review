@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/components/cameracapture.tsx","./src/lib/api.ts","./src/lib/types.ts","./src/pages/scanpage.tsx","./src/pages/setspage.tsx"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/cameracapture.tsx","./src/components/confirmdialog.tsx","./src/lib/api.ts","./src/lib/types.ts","./src/pages/scanpage.tsx","./src/pages/setdetailpage.tsx","./src/pages/setsaddpage.tsx","./src/pages/setsgallerypage.tsx"],"version":"5.9.3"}

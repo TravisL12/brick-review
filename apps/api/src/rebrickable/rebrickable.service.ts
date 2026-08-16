@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type {
   RebrickableInventoryPart,
   RebrickablePage,
+  RebrickableColorDetail,
   RebrickableSet,
   RebrickableTheme,
 } from './rebrickable.types';
@@ -126,6 +127,24 @@ export class RebrickableService {
       this.logger.warn(`Could not resolve theme ${themeId}: ${String(err)}`);
       return null;
     }
+  }
+
+  /** The whole colour table (~275 rows), including external catalogue ids. */
+  async getColors(): Promise<RebrickableColorDetail[]> {
+    this.assertConfigured();
+    const all: RebrickableColorDetail[] = [];
+    let page = 1;
+    for (;;) {
+      const res = await this.request<RebrickablePage<RebrickableColorDetail>>('/lego/colors/', {
+        page,
+        page_size: 1000,
+        inc_color_details: 1,
+      });
+      all.push(...res.results);
+      if (!res.next || page >= 10) break;
+      page += 1;
+    }
+    return all;
   }
 
   getSet(setNum: string): Promise<RebrickableSet> {

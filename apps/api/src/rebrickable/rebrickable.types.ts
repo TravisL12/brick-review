@@ -50,3 +50,12 @@ export interface RebrickableTheme {
   parent_id: number | null;
   name: string;
 }
+
+export interface RebrickableColorDetail {
+  id: number;
+  name: string;
+  rgb: string;
+  is_trans: boolean;
+  /** e.g. { BrickLink: { ext_ids: [11], ext_descrs: [["Black"]] } } */
+  external_ids?: Record<string, { ext_ids: number[]; ext_descrs: string[][] }>;
+}

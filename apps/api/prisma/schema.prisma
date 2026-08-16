@@ -81,3 +81,14 @@ model ScanEvent {
 
   @@index([createdAt])
 }
+
+/// Maps a Rebrickable colour id to its BrickLink equivalent, so part links can
+/// deep-link to the right colour. Populated once from Rebrickable's colour table.
+model ColorAlias {
+  /// Rebrickable colour id
+  id          Int      @id
+  name        String
+  rgb         String?
+  bricklinkId Int?
+  updatedAt   DateTime @updatedAt
+}

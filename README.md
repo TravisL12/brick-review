@@ -45,11 +45,31 @@ yarn workspace @brick-review/api seed:demo --clear    # remove them
 
 ## Using it
 
-**My sets** — paste set numbers however you have them: commas, newlines, spaces, `#` prefixes,
-a copied spreadsheet column, or load a `.txt`/`.csv`. The `-1` variant suffix is added
-automatically (`10276` → `10276-1`), duplicates are dropped, and stray words like `LEGO` are
-ignored. Each set's full inventory downloads in the background — status shows per set, and
+| Route | What it is |
+| --- | --- |
+| `/sets` | Gallery — tiled view of the whole collection, with search, theme filter and sorting |
+| `/sets/add` | Import and manage: bulk entry, sync status, resync, remove |
+| `/sets/:setNum` | One set: large image, metadata and full piece inventory |
+| `/scan` | Camera scanning and session ranking |
+
+**Add sets** (`/sets/add`) — paste set numbers however you have them: commas, newlines, spaces,
+`#` prefixes, a copied spreadsheet column, or load a `.txt`/`.csv`. The `-1` variant suffix is
+added automatically (`10276` → `10276-1`), duplicates are dropped, and stray words like `LEGO`
+are ignored. Each set's full inventory downloads in the background — status shows per set, and
 failures can be retried.
+
+**My sets** (`/sets`) — the gallery. Search by name, number, theme or year, filter to a
+top-level theme, and sort by name, number, year or piece count. Every tile links to its set.
+
+**Set detail** (`/sets/:setNum`) — large box art, theme path, year, piece and colour counts, and
+the complete inventory with part images, quantities, colour swatches and element ids. The
+inventory can be searched, filtered by colour, sorted, and spares can be hidden. Every piece
+links out to its Rebrickable and BrickLink catalogue page. Rebrickable publishes no prose
+description for sets, so the info panel is built from real metadata rather than invented copy,
+with links out to Rebrickable and BrickLink for the rest.
+
+Removing a set asks for confirmation first, naming the set and how many inventory lines go with
+it. Escape or a backdrop click cancels.
 
 **Scan bricks** — start the camera and either hit *Identify brick* per brick or turn on
 *Live scan* to sample every 1–6s. Each result shows the candidate parts, whether you own them,
@@ -68,8 +88,10 @@ apps/api    NestJS + Prisma + SQLite
   brickognize/   API client, serialised and throttled so live scan can't firehose
   recognition/   part -> owned-set matching and session ranking
 apps/web    Vite + React + TypeScript
-  pages/SetsPage.tsx   collection management
-  pages/ScanPage.tsx   camera, live scan, session ranking
+  pages/SetsGalleryPage.tsx  tiled collection gallery
+  pages/SetsAddPage.tsx     bulk import + sync management
+  pages/SetDetailPage.tsx   one set, with searchable piece inventory
+  pages/ScanPage.tsx        camera, live scan, session ranking
 ```
 
 ## API
@@ -79,6 +101,8 @@ apps/web    Vite + React + TypeScript
 | `GET` | `/api/health` | DB + config status |
 | `GET` | `/api/sets` | collection with sync status |
 | `GET` | `/api/sets/stats` | counts, incl. whether the Rebrickable key is set |
+| `GET` | `/api/sets/:setNum` | one set plus aggregate inventory summary |
+| `GET` | `/api/sets/:setNum/parts` | full piece inventory for a set |
 | `POST` | `/api/sets/import` | `{ text }` or `{ setNums[] }` — bulk add |
 | `POST` | `/api/sets/:setNum/resync` | re-download one inventory |
 | `POST` | `/api/sets/retry-failed` | requeue everything that errored |
@@ -94,6 +118,13 @@ apps/web    Vite + React + TypeScript
 - **Ranking is coverage-based**, weighted by recognition confidence. It does not yet account for
   how *rare* a part is — a 1x2 plate appearing in a set is much weaker evidence than an unusual
   printed piece. Inverse-frequency weighting is the obvious next improvement.
+- Theme names come from Rebrickable's theme table, fetched once per process and cached. Sets
+  synced before that existed are backfilled on the next API start.
+- Part links are built from catalogue ids, not guessed. BrickLink part ids come from the
+  `PartAlias` table (13% of them differ from the Rebrickable number), and BrickLink colour ids
+  from `ColorAlias`, populated once from Rebrickable's colour table on first inventory view.
+  Rebrickable redirects `/parts/{id}/` to its own canonical slug and ignores a colour segment,
+  so those links are part-level; BrickLink links deep-link to the exact colour via `idColor`.
 - Scans are recorded in the `ScanEvent` table; nothing reads it yet, but it is there for
   tuning matching or submitting feedback to Brickognize.
 - Rebrickable rate-limits to about 1 request/second and bans repeat offenders. Both clients

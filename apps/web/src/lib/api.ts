@@ -1,8 +1,10 @@
 import type {
   ImportResult,
   IdentifyResponse,
+  InventoryPart,
   LegoSet,
   RankResponse,
+  SetDetail,
   SetsStats,
 } from './types';
 
@@ -28,6 +30,14 @@ export const api = {
   listSets: () => fetch(`${BASE}/sets`).then((r) => handle<LegoSet[]>(r)),
 
   setsStats: () => fetch(`${BASE}/sets/stats`).then((r) => handle<SetsStats>(r)),
+
+  getSet: (setNum: string) =>
+    fetch(`${BASE}/sets/${encodeURIComponent(setNum)}`).then((r) => handle<SetDetail>(r)),
+
+  getSetParts: (setNum: string) =>
+    fetch(`${BASE}/sets/${encodeURIComponent(setNum)}/parts`).then((r) =>
+      handle<InventoryPart[]>(r),
+    ),
 
   importSets: (text: string) =>
     fetch(`${BASE}/sets/import`, {
