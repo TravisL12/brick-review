@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { api } from '../lib/api';
+import { SetArt } from '../components/SetArt';
+import { api, errorMessage } from '../lib/api';
 import type { ImportResult, LegoSet, SetsStats } from '../lib/types';
-import { thumbSources } from '../lib/images';
 
 const PLACEHOLDER = `Paste set numbers any way you like:
 
@@ -30,7 +30,7 @@ export function SetsAddPage() {
       setStats(nextStats);
       return nextSets;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       return [];
     }
   }, []);
@@ -57,7 +57,7 @@ export function SetsAddPage() {
       setText('');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -76,7 +76,7 @@ export function SetsAddPage() {
       await fn();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -168,17 +168,7 @@ export function SetsAddPage() {
           <ul className="set-list">
             {sets.map((set) => (
               <li key={set.id} className="set-row">
-                {set.imgUrl ? (
-                  <img
-                    {...thumbSources(set.imgUrl)}
-                    sizes="64px"
-                    alt=""
-                    className="set-thumb"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="set-thumb placeholder" aria-hidden="true" />
-                )}
+                <SetArt url={set.imgUrl} variant="row" />
                 <div className="set-info">
                   <div className="set-title">
                     <Link to={`/sets/${encodeURIComponent(set.setNum)}`}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { heroSources, thumbSources } from '../lib/images';
+import { SetArt } from './SetArt';
 import type { SetImage } from '../lib/types';
 
 export interface SetImageCarouselProps {
@@ -7,10 +7,13 @@ export interface SetImageCarouselProps {
   alt: string;
 }
 
-/** Filmstrip source: Brickset ships its own thumb, Rebrickable derives one. */
-function stripSrc(image: SetImage): { src: string; srcSet?: string } {
-  if (image.thumbUrl) return { src: image.thumbUrl };
-  return thumbSources(image.url);
+/**
+ * Filmstrip source: Brickset ships its own thumb, Rebrickable derives one from
+ * the full-size URL. Either way `SetArt` does the right thing — the preset
+ * ladder only applies to Rebrickable URLs and passes everything else through.
+ */
+function stripUrl(image: SetImage): string {
+  return image.thumbUrl ?? image.url;
 }
 
 export function SetImageCarousel({ images, alt }: SetImageCarouselProps) {
@@ -58,8 +61,6 @@ export function SetImageCarousel({ images, alt }: SetImageCarouselProps) {
     );
   }
 
-  const hero = current.thumbUrl ? { src: current.url } : heroSources(current.url);
-
   return (
     <div className="set-carousel">
       <div className="detail-art">
@@ -69,10 +70,9 @@ export function SetImageCarousel({ images, alt }: SetImageCarouselProps) {
           onClick={() => setZoomed(true)}
           aria-label="View full size"
         >
-          <img
-            src={hero.src}
-            srcSet={hero.srcSet}
-            sizes="(max-width: 780px) 92vw, 460px"
+          <SetArt
+            url={current.url}
+            variant="hero"
             alt={count > 1 ? `${alt} (${safeIndex + 1} of ${count})` : alt}
           />
         </button>
@@ -104,28 +104,19 @@ export function SetImageCarousel({ images, alt }: SetImageCarouselProps) {
 
       {count > 1 && (
         <ul className="art-strip">
-          {images.map((image, i) => {
-            const strip = stripSrc(image);
-            return (
-              <li key={image.id}>
-                <button
-                  type="button"
-                  className={i === safeIndex ? 'active' : ''}
-                  onClick={() => setIndex(i)}
-                  aria-label={`Image ${i + 1}`}
-                  aria-current={i === safeIndex}
-                >
-                  <img
-                    src={strip.src}
-                    srcSet={strip.srcSet}
-                    sizes="60px"
-                    alt=""
-                    loading="lazy"
-                  />
-                </button>
-              </li>
-            );
-          })}
+          {images.map((image, i) => (
+            <li key={image.id}>
+              <button
+                type="button"
+                className={i === safeIndex ? 'active' : ''}
+                onClick={() => setIndex(i)}
+                aria-label={`Image ${i + 1}`}
+                aria-current={i === safeIndex}
+              >
+                <SetArt url={stripUrl(image)} variant="strip" />
+              </button>
+            </li>
+          ))}
         </ul>
       )}
 

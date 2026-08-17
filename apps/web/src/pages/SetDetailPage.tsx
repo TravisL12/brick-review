@@ -1,20 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SetImageCarousel } from '../components/SetImageCarousel';
-import { api } from '../lib/api';
-import type { InventoryPart, SetDetail } from '../lib/types';
+import { useAsyncData } from '../hooks/useAsyncData';
+import { api, errorMessage } from '../lib/api';
+import type { InventoryPart } from '../lib/types';
 
 type PartSort = 'quantity' | 'name' | 'partNum' | 'color';
+
+/** Stable identity so the filter memos below do not rerun while loading. */
+const NO_PARTS: InventoryPart[] = [];
 
 export function SetDetailPage() {
   const { setNum = '' } = useParams();
   const navigate = useNavigate();
 
-  const [set, setSet] = useState<SetDetail | null>(null);
-  const [parts, setParts] = useState<InventoryPart[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The header and the inventory arrive together: either both render or the page is an error.
+  const { data, setData, loading, error, setError } = useAsyncData(
+    () => Promise.all([api.getSet(setNum), api.getSetParts(setNum)]),
+    [setNum],
+  );
+  const set = data?.[0] ?? null;
+  const parts = data?.[1] ?? NO_PARTS;
+
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
@@ -22,27 +30,6 @@ export function SetDetailPage() {
   const [color, setColor] = useState('');
   const [showSpares, setShowSpares] = useState(true);
   const [sort, setSort] = useState<PartSort>('quantity');
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    Promise.all([api.getSet(setNum), api.getSetParts(setNum)])
-      .then(([detail, inventory]) => {
-        if (cancelled) return;
-        setSet(detail);
-        setParts(inventory);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [setNum]);
 
   const colors = useMemo(() => {
     const found = new Map<string, string | null>();
@@ -92,9 +79,10 @@ export function SetDetailPage() {
     try {
       await api.resyncSet(setNum);
       const detail = await api.getSet(setNum);
-      setSet(detail);
+      // Only the header is refetched; the inventory it already showed still stands.
+      setData((prev) => (prev ? [detail, prev[1]] : prev));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -106,7 +94,7 @@ export function SetDetailPage() {
       await api.removeSet(setNum);
       void navigate('/sets');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       setBusy(false);
       setConfirmRemove(false);
     }

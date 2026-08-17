@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { errorMessage } from '../lib/api';
 
 const MAX_EDGE = 1024;
 
@@ -58,7 +59,7 @@ export function CameraCapture({ captureRef, overlay }: CameraCaptureProps) {
         } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
           setError('No usable camera found. Try a different device or upload a photo.');
         } else {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
         }
         setActive(false);
       }

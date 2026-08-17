@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ThrottledClient } from '../common/throttled-client';
 import type {
   BricksetAdditionalImagesResponse,
   BricksetGetSetsResponse,
@@ -31,8 +32,11 @@ export interface BricksetImages {
 export class BricksetService {
   private readonly logger = new Logger(BricksetService.name);
   private readonly apiKey: string;
-  private queue: Promise<unknown> = Promise.resolve();
-  private lastRequestAt = 0;
+  private readonly http = new ThrottledClient({
+    name: 'Brickset',
+    minIntervalMs: MIN_INTERVAL_MS,
+    maxRetries: MAX_RETRIES,
+  });
 
   constructor(config: ConfigService) {
     this.apiKey = config.get<string>('BRICKSET_API_KEY', '').trim();
@@ -83,39 +87,25 @@ export class BricksetService {
     endpoint: string,
     params: Record<string, string>,
   ): Promise<T> {
-    const run = async (): Promise<T> => {
-      const wait = this.lastRequestAt + MIN_INTERVAL_MS - Date.now();
-      if (wait > 0) await sleep(wait);
+    const url = new URL(`${BASE_URL}/${endpoint}`);
+    url.searchParams.set('apiKey', this.apiKey);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-      const url = new URL(`${BASE_URL}/${endpoint}`);
-      url.searchParams.set('apiKey', this.apiKey);
-      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    return this.http.run<T>(async ({ canRetry, retry }) => {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
 
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        this.lastRequestAt = Date.now();
-        const res = await fetch(url, { headers: { Accept: 'application/json' } });
-
-        if (!res.ok) {
-          if (res.status >= 500 && attempt < MAX_RETRIES) {
-            await sleep(MIN_INTERVAL_MS * Math.pow(2, attempt + 1));
-            continue;
-          }
-          throw new Error(`Brickset ${endpoint} failed (${res.status})`);
-        }
-
-        const body = (await res.json()) as T;
-        if (body.status !== 'success') {
-          throw new Error(`Brickset ${endpoint}: ${body.message ?? 'unknown error'}`);
-        }
-        return body;
+      if (!res.ok) {
+        if (res.status >= 500 && canRetry) retry();
+        throw new Error(`Brickset ${endpoint} failed (${res.status})`);
       }
-      throw new Error(`Brickset ${endpoint} failed after retries`);
-    };
 
-    const chained = this.queue.then(run, run);
-    // Keep the chain alive even when a call rejects.
-    this.queue = chained.catch(() => undefined);
-    return chained;
+      // A failed call still answers 200; the verdict is in the envelope.
+      const body = (await res.json()) as T;
+      if (body.status !== 'success') {
+        throw new Error(`Brickset ${endpoint}: ${body.message ?? 'unknown error'}`);
+      }
+      return body;
+    });
   }
 }
 
@@ -126,8 +116,4 @@ export class BricksetService {
 function imageOrder(url: string): number {
   const match = /(\d+)(?=\.[a-z]+$)/i.exec(url);
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

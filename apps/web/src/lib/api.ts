@@ -10,6 +10,11 @@ import type {
 
 const BASE = '/api';
 
+/** Anything can be thrown; only `Error` carries the message `handle` puts there. */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `Request failed (${res.status})`;

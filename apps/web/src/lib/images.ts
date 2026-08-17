@@ -2,6 +2,12 @@
  * Rebrickable serves resized copies of every /media/ image under /media/thumbs/,
  * but only at a fixed set of preset sizes — anything else 404s. These are the
  * presets that exist, verified against the CDN.
+ *
+ * The API pre-warms these on the CDN at sync time, because the first request for
+ * a given image+preset pays 0.2-0.8s of server-side resize. Whatever ladder the
+ * helpers below hand to an <img>, `WARM_PRESETS` in
+ * apps/api/src/common/rebrickable-image.util.ts must contain — a size requested
+ * here but missing there is the one that loads cold in front of the user.
  */
 const REBRICKABLE_PRESETS = [
   '150x150p',
@@ -16,17 +22,13 @@ const REBRICKABLE_PRESETS = [
 
 export type RebrickableThumbSize = (typeof REBRICKABLE_PRESETS)[number];
 
-/** Rendered pixel width of each preset, for srcSet `w` descriptors. */
-const PRESET_WIDTH: Record<RebrickableThumbSize, number> = {
-  '150x150p': 150,
-  '200x150p': 200,
-  '250x250p': 250,
-  '320x180p': 320,
-  '500x400p': 500,
-  '640x480p': 640,
-  '800x600p': 800,
-  '1000x800p': 1000,
-};
+/**
+ * Rendered pixel width of a preset, for srcSet `w` descriptors. Read off the
+ * preset name so the two can never drift — `500x400p` is 500px wide.
+ */
+function presetWidth(size: RebrickableThumbSize): number {
+  return Number.parseInt(size, 10);
+}
 
 /**
  * Originals run about 2400px wide but vary per set, so the `w` descriptor is an
@@ -59,29 +61,33 @@ export interface ImageSources {
  */
 export function setImageSources(
   url: string,
-  presets: RebrickableThumbSize[],
+  presets: readonly RebrickableThumbSize[],
   opts: { includeOriginal?: boolean } = {},
 ): ImageSources {
   if (!isRebrickableMedia(url)) return { src: url };
 
-  const entries = presets.map((size) => `${rebrickableThumb(url, size)} ${PRESET_WIDTH[size]}w`);
+  const entries = presets.map((size) => `${rebrickableThumb(url, size)} ${presetWidth(size)}w`);
   if (opts.includeOriginal) entries.push(`${url} ${ORIGINAL_WIDTH_HINT}w`);
 
   const fallback = presets.length > 0 ? rebrickableThumb(url, presets[presets.length - 1]) : url;
   return { src: fallback, srcSet: entries.join(', ') };
 }
 
+const THUMB_LADDER = ['150x150p', '250x250p'] as const;
+/** Shared by the gallery tile and the detail hero; the hero also offers the original. */
+const LARGE_LADDER = ['500x400p', '800x600p', '1000x800p'] as const;
+
 /** Small square thumbnail — list rows, carousel filmstrip. */
 export function thumbSources(url: string): ImageSources {
-  return setImageSources(url, ['150x150p', '250x250p']);
+  return setImageSources(url, THUMB_LADDER);
 }
 
 /** Gallery tile art, roughly 230–350 CSS px wide. */
 export function tileSources(url: string): ImageSources {
-  return setImageSources(url, ['500x400p', '800x600p', '1000x800p']);
+  return setImageSources(url, LARGE_LADDER);
 }
 
 /** Detail hero: full resolution on large or high-DPI displays. */
 export function heroSources(url: string): ImageSources {
-  return setImageSources(url, ['500x400p', '800x600p', '1000x800p'], { includeOriginal: true });
+  return setImageSources(url, LARGE_LADDER, { includeOriginal: true });
 }

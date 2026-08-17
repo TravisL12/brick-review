@@ -5,6 +5,7 @@ import {
   isRebrickableMedia,
   rebrickableThumb,
 } from '../common/rebrickable-image.util';
+import { ThrottledClient } from '../common/throttled-client';
 import type {
   RebrickableInventoryPart,
   RebrickablePage,
@@ -24,9 +25,12 @@ const WARM_TIMEOUT_MS = 5000;
 export class RebrickableService {
   private readonly logger = new Logger(RebrickableService.name);
   private readonly apiKey: string;
-  /** Promise chain that serialises every outbound call. */
-  private queue: Promise<unknown> = Promise.resolve();
-  private lastRequestAt = 0;
+  private readonly http = new ThrottledClient({
+    name: 'Rebrickable',
+    minIntervalMs: MIN_INTERVAL_MS,
+    maxRetries: MAX_RETRIES,
+    logger: this.logger,
+  });
   /** Themes change rarely and the whole list is small, so load it once per process. */
   private themes: Promise<Map<number, RebrickableTheme>> | null = null;
 
@@ -49,48 +53,33 @@ export class RebrickableService {
 
   /** Serialised + throttled GET with retry on 429/5xx. */
   private request<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
-    const run = async (): Promise<T> => {
-      const wait = this.lastRequestAt + MIN_INTERVAL_MS - Date.now();
-      if (wait > 0) await sleep(wait);
+    const url = new URL(path.startsWith('http') ? path : `${BASE_URL}${path}`);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
 
-      const url = new URL(path.startsWith('http') ? path : `${BASE_URL}${path}`);
-      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+    return this.http.run<T>(async ({ canRetry, retry }) => {
+      const res = await fetch(url, {
+        headers: { Authorization: `key ${this.apiKey}`, Accept: 'application/json' },
+      });
 
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        this.lastRequestAt = Date.now();
-        const res = await fetch(url, {
-          headers: { Authorization: `key ${this.apiKey}`, Accept: 'application/json' },
-        });
+      if (res.ok) return (await res.json()) as T;
 
-        if (res.ok) return (await res.json()) as T;
-
-        if (res.status === 404) {
-          throw new HttpException(`Not found on Rebrickable: ${path}`, HttpStatus.NOT_FOUND);
-        }
-        if (res.status === 401 || res.status === 403) {
-          throw new HttpException(
-            'Rebrickable rejected the API key (401/403). Check REBRICKABLE_API_KEY.',
-            HttpStatus.FAILED_DEPENDENCY,
-          );
-        }
-        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
-          const backoff = MIN_INTERVAL_MS * Math.pow(2, attempt + 1);
-          this.logger.warn(`Rebrickable ${res.status} on ${path}; retrying in ${backoff}ms`);
-          await sleep(backoff);
-          continue;
-        }
+      if (res.status === 404) {
+        throw new HttpException(`Not found on Rebrickable: ${path}`, HttpStatus.NOT_FOUND);
+      }
+      if (res.status === 401 || res.status === 403) {
         throw new HttpException(
-          `Rebrickable request failed (${res.status}): ${(await res.text()).slice(0, 300)}`,
-          HttpStatus.BAD_GATEWAY,
+          'Rebrickable rejected the API key (401/403). Check REBRICKABLE_API_KEY.',
+          HttpStatus.FAILED_DEPENDENCY,
         );
       }
-      throw new HttpException('Rebrickable request failed after retries', HttpStatus.BAD_GATEWAY);
-    };
-
-    const chained = this.queue.then(run, run);
-    // Keep the chain alive even when a call rejects.
-    this.queue = chained.catch(() => undefined);
-    return chained;
+      if ((res.status === 429 || res.status >= 500) && canRetry) {
+        retry(`Rebrickable ${res.status} on ${path}`);
+      }
+      throw new HttpException(
+        `Rebrickable request failed (${res.status}): ${(await res.text()).slice(0, 300)}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    });
   }
 
   /** Full theme table, fetched once and memoised. */
@@ -205,8 +194,4 @@ export class RebrickableService {
     }
     return all;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

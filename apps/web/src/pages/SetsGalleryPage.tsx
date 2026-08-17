@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { SetArt } from '../components/SetArt';
+import { useAsyncData } from '../hooks/useAsyncData';
 import { api } from '../lib/api';
 import type { LegoSet } from '../lib/types';
-import { tileSources } from '../lib/images';
 
 type SortKey = 'recent' | 'name' | 'setNum' | 'year' | 'parts';
+
+/** Stable identity so the filter memos below do not rerun while loading. */
+const NO_SETS: LegoSet[] = [];
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'recent', label: 'Recently added' },
@@ -15,30 +19,12 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 export function SetsGalleryPage() {
-  const [sets, setSets] = useState<LegoSet[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error } = useAsyncData(() => api.listSets(), []);
+  const sets = data ?? NO_SETS;
+
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('recent');
   const [theme, setTheme] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .listSets()
-      .then((data) => {
-        if (!cancelled) setSets(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Top-level theme only ("Ninjago" out of "Ninjago > Dragons Rising") to keep the filter short.
   const themes = useMemo(() => {
@@ -152,16 +138,7 @@ export function SetsGalleryPage() {
             <li key={set.id}>
               <Link className="tile" to={`/sets/${encodeURIComponent(set.setNum)}`}>
                 <div className="tile-art">
-                  {set.imgUrl ? (
-                    <img
-                      {...tileSources(set.imgUrl)}
-                      sizes="(max-width: 640px) 45vw, 300px"
-                      alt={set.name ?? set.setNum}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="tile-placeholder" aria-hidden="true" />
-                  )}
+                  <SetArt url={set.imgUrl} variant="tile" alt={set.name ?? set.setNum} />
                   {set.syncStatus !== 'ready' && (
                     <span className={`pill pill-${set.syncStatus} tile-badge`}>
                       {set.syncStatus === 'error' ? 'Failed' : 'Syncing'}

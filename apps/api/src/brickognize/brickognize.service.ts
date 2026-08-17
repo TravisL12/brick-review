@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ThrottledClient } from '../common/throttled-client';
 import type { BrickognizeResult, BrickognizeSearchType } from './brickognize.types';
 
 const PATH_BY_TYPE: Record<BrickognizeSearchType, string> = {
@@ -13,15 +14,16 @@ const PATH_BY_TYPE: Record<BrickognizeSearchType, string> = {
 export class BrickognizeService {
   private readonly logger = new Logger(BrickognizeService.name);
   private readonly baseUrl: string;
-  private readonly minIntervalMs: number;
-  private queue: Promise<unknown> = Promise.resolve();
-  private lastRequestAt = 0;
+  private readonly http: ThrottledClient;
 
   constructor(config: ConfigService) {
     this.baseUrl = config
       .get<string>('BRICKOGNIZE_BASE_URL', 'https://api.brickognize.com')
       .replace(/\/$/, '');
-    this.minIntervalMs = Number(config.get<string>('BRICKOGNIZE_MIN_INTERVAL_MS', '700'));
+    this.http = new ThrottledClient({
+      name: 'Brickognize',
+      minIntervalMs: Number(config.get<string>('BRICKOGNIZE_MIN_INTERVAL_MS', '700')),
+    });
   }
 
   /**
@@ -34,11 +36,7 @@ export class BrickognizeService {
     mimetype: string,
     searchType: BrickognizeSearchType = 'parts',
   ): Promise<BrickognizeResult> {
-    const run = async (): Promise<BrickognizeResult> => {
-      const wait = this.lastRequestAt + this.minIntervalMs - Date.now();
-      if (wait > 0) await sleep(wait);
-      this.lastRequestAt = Date.now();
-
+    return this.http.run<BrickognizeResult>(async () => {
       const form = new FormData();
       form.append(
         'query_image',
@@ -74,14 +72,6 @@ export class BrickognizeService {
       }
 
       return (await res.json()) as BrickognizeResult;
-    };
-
-    const chained = this.queue.then(run, run);
-    this.queue = chained.catch(() => undefined);
-    return chained;
+    });
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
