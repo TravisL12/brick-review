@@ -122,6 +122,15 @@ ul { list-style: none; margin: 0; padding: 0; }
 .pill-syncing { background: rgba(255,207,0,0.15); color: var(--accent); }
 .pill-error { background: rgba(255,90,95,0.15); color: var(--err); }
 
+.how-to {
+  margin: 10px 0 0; padding: 12px 14px 12px 30px; list-style: decimal;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--muted); font-size: 13px; line-height: 1.5;
+}
+.how-to li + li { margin-top: 6px; }
+.how-to strong { color: var(--text); }
+.how-to em { color: var(--accent); font-style: normal; }
+
 .camera { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
 .camera-stage {
   position: relative; width: 100%; aspect-ratio: 4 / 3; background: #000;
@@ -153,8 +162,16 @@ ul { list-style: none; margin: 0; padding: 0; }
 .score-fill { height: 100%; background: var(--accent); border-radius: 999px; }
 .score-label { font-size: 12px; color: var(--muted); min-width: 34px; text-align: right; }
 
-.mini-set-list li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-.mini-set-list li:last-child { border-bottom: none; }
+.seg {
+  display: inline-flex; gap: 2px; padding: 2px; margin: 10px 0 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+}
+.seg button {
+  background: transparent; border: none; color: var(--muted);
+  padding: 6px 12px; border-radius: 7px; font-size: 13px; font-weight: 500;
+}
+.seg button:hover { color: var(--text); }
+.seg button.active { background: var(--panel-2); color: var(--text); }
 
 .ranked-list { display: flex; flex-direction: column; gap: 10px; }
 .ranked-list li {

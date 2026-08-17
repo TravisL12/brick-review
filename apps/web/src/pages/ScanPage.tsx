@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CameraCapture } from '../components/CameraCapture';
-import { api } from '../lib/api';
-import type { Candidate, IdentifyResponse, RankResponse } from '../lib/types';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CameraCapture } from "../components/CameraCapture";
+import { api } from "../lib/api";
+import type {
+  Candidate,
+  IdentifyResponse,
+  RankResponse,
+  SetMatch,
+} from "../lib/types";
 
 interface Observation {
   partNum: string;
@@ -22,8 +27,12 @@ export function ScanPage() {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [intervalMs, setIntervalMs] = useState(2500);
-  const [observations, setObservations] = useState<Record<string, Observation>>({});
+  const [observations, setObservations] = useState<Record<string, Observation>>(
+    {},
+  );
   const [ranking, setRanking] = useState<RankResponse | null>(null);
+  /** The right-hand panel shows either the current brick's sets or the running session tally. */
+  const [view, setView] = useState<"brick" | "session">("brick");
 
   // `busy` is read inside the live-scan timer; a ref keeps the timer effect stable.
   const busyRef = useRef(false);
@@ -52,7 +61,10 @@ export function ScanPage() {
       setBusy(true);
       if (!auto) setError(null);
       try {
-        const res = await api.identify(blob, { searchType: 'parts', minScore: MIN_SCORE });
+        const res = await api.identify(blob, {
+          searchType: "parts",
+          minScore: MIN_SCORE,
+        });
         setResult(res);
         setError(null);
         const top = res.candidates[0];
@@ -70,7 +82,7 @@ export function ScanPage() {
     async (opts?: { auto?: boolean }) => {
       const blob = await captureRef.current?.();
       if (!blob) {
-        setError('No camera frame available — start the camera first.');
+        setError("No camera frame available — start the camera first.");
         return;
       }
       await identify(blob, opts);
@@ -111,7 +123,9 @@ export function ScanPage() {
     };
   }, [observations]);
 
-  const observationList = Object.values(observations).sort((a, b) => b.hits - a.hits);
+  const observationList = Object.values(observations).sort(
+    (a, b) => b.hits - a.hits,
+  );
   const overlay =
     result && result.boundingBox
       ? {
@@ -127,15 +141,22 @@ export function ScanPage() {
   return (
     <div className="page scan-layout">
       <section className="card">
-        <h2>Scan</h2>
         <CameraCapture captureRef={captureRef} overlay={overlay} />
 
         <div className="row">
-          <button className="primary" onClick={() => void scanOnce()} disabled={busy}>
-            {busy ? 'Identifying…' : 'Identify brick'}
+          <button
+            className="primary"
+            onClick={() => void scanOnce()}
+            disabled={busy}
+          >
+            {busy ? "Identifying…" : "Identify brick"}
           </button>
           <label className="toggle">
-            <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={live}
+              onChange={(e) => setLive(e.target.checked)}
+            />
             Live scan
           </label>
           <label className="slider">
@@ -161,7 +182,7 @@ export function ScanPage() {
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void identify(file);
-              e.target.value = '';
+              e.target.value = "";
             }}
           />
         </div>
@@ -172,11 +193,13 @@ export function ScanPage() {
           <div className="candidates">
             <h3>This brick looks like</h3>
             {result.candidates.length === 0 ? (
-              <p className="muted">No confident match. Try better light or a plainer background.</p>
+              <p className="muted">
+                No confident match. Try better light or a plainer background.
+              </p>
             ) : (
               <ul className="candidate-list">
                 {result.candidates.map((c) => (
-                  <li key={c.id} className={c.inCollection ? 'owned' : ''}>
+                  <li key={c.id} className={c.inCollection ? "owned" : ""}>
                     <img src={c.imgUrl} alt="" loading="lazy" />
                     <div className="candidate-info">
                       <div className="candidate-title">
@@ -186,10 +209,13 @@ export function ScanPage() {
                       <ScoreBar score={c.score} />
                       {c.inCollection ? (
                         <div className="owned-in">
-                          In {new Set(c.ownedIn.map((o) => o.setNum)).size} of your sets
+                          In {new Set(c.ownedIn.map((o) => o.setNum)).size} of
+                          your sets
                         </div>
                       ) : (
-                        <div className="muted small">Not in your collection</div>
+                        <div className="muted small">
+                          Not in your collection
+                        </div>
                       )}
                     </div>
                   </li>
@@ -199,28 +225,31 @@ export function ScanPage() {
           </div>
         )}
 
-        {result && result.setMatches.length > 0 && (
-          <div className="frame-matches">
-            <h3>Sets containing this brick</h3>
-            <ul className="mini-set-list">
-              {result.setMatches.slice(0, 8).map((m) => (
-                <li key={m.setNum}>
-                  <strong>{m.setNum}</strong> {m.name ?? ''}
-                  <span className="muted small">
-                    {' '}
-                    ×{m.matches.reduce((sum, x) => sum + x.quantity, 0)}
-                    {m.matches[0]?.colorName ? ` · ${m.matches[0].colorName}` : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <h2>Scan</h2>
+        <ol className="how-to">
+          <li>
+            <strong>One brick per shot.</strong> Each scan identifies a single
+            piece — the yellow box shows what was read. Keep other bricks out of
+            frame, or you will get a guess for whichever one the camera picked.
+          </li>
+          <li>
+            <strong>Plain background, decent light.</strong> Hold the brick so
+            it fills a good part of the frame, ideally against a flat surface
+            that is not the same colour.
+          </li>
+          <li>
+            <strong>Work through the pile.</strong> Turn on <em>Live scan</em>{" "}
+            and swap bricks in front of the lens, or press{" "}
+            <em>Identify brick</em> once per piece. Every brick lands in{" "}
+            <em>Session</em>, and the more you scan the better your sets are
+            ranked.
+          </li>
+        </ol>
       </section>
 
       <section className="card">
         <div className="section-head">
-          <h2>Session</h2>
+          <h2>Matching sets</h2>
           {observationList.length > 0 && (
             <button
               onClick={() => {
@@ -233,42 +262,104 @@ export function ScanPage() {
           )}
         </div>
 
-        {observationList.length === 0 ? (
-          <p className="muted">
-            Identified bricks collect here. The more bricks you scan, the more confidently a set
-            can be picked out.
-          </p>
-        ) : (
-          <>
-            <h3>Best matching sets</h3>
-            {ranking && ranking.sets.length > 0 ? (
-              <ul className="ranked-list">
-                {ranking.sets.slice(0, 10).map((s) => (
-                  <li key={s.setNum}>
-                    {s.imgUrl ? (
-                      <img src={s.imgUrl} alt="" className="set-thumb" loading="lazy" />
-                    ) : (
-                      <div className="set-thumb placeholder" aria-hidden="true" />
-                    )}
-                    <div className="ranked-info">
-                      <div className="candidate-title">
-                        <strong>{s.setNum}</strong>
-                        <span>{s.name ?? ''}</span>
-                      </div>
-                      <ScoreBar score={s.coverage} label={`${Math.round(s.coverage * 100)}%`} />
-                      <div className="muted small">
-                        {s.distinctPartsMatched} of {ranking.observedParts} scanned parts
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">
-                None of the scanned bricks appear in your synced sets yet.
-              </p>
-            )}
+        <div className="seg">
+          <button
+            className={view === "brick" ? "active" : ""}
+            aria-pressed={view === "brick"}
+            onClick={() => setView("brick")}
+          >
+            This brick
+          </button>
+          <button
+            className={view === "session" ? "active" : ""}
+            aria-pressed={view === "session"}
+            onClick={() => setView("session")}
+          >
+            Session
+            {observationList.length > 0 ? ` (${observationList.length})` : ""}
+          </button>
+        </div>
 
+        {view === "brick" ? (
+          !result ? (
+            <p className="muted">
+              Scan a brick and the sets it belongs to land here — just this one
+              brick, not the whole session.
+            </p>
+          ) : result.setMatches.length === 0 ? (
+            <p className="muted">
+              This brick is not in any of your synced sets.
+            </p>
+          ) : (
+            <ul className="ranked-list">
+              {result.setMatches.map((m) => (
+                <li key={m.setNum}>
+                  {m.imgUrl ? (
+                    <img
+                      src={m.imgUrl}
+                      alt=""
+                      className="set-thumb"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="set-thumb placeholder" aria-hidden="true" />
+                  )}
+                  <div className="ranked-info">
+                    <div className="candidate-title">
+                      <strong>{m.setNum}</strong>
+                      <span>{m.name ?? ""}</span>
+                    </div>
+                    <ScoreBar score={m.bestScore} />
+                    <MatchColors matches={m.matches} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : observationList.length === 0 ? (
+          <p className="muted">
+            Identified bricks collect here. The more bricks you scan, the more
+            confidently a set can be picked out.
+          </p>
+        ) : ranking && ranking.sets.length > 0 ? (
+          <ul className="ranked-list">
+            {ranking.sets.slice(0, 10).map((s) => (
+              <li key={s.setNum}>
+                {s.imgUrl ? (
+                  <img
+                    src={s.imgUrl}
+                    alt=""
+                    className="set-thumb"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="set-thumb placeholder" aria-hidden="true" />
+                )}
+                <div className="ranked-info">
+                  <div className="candidate-title">
+                    <strong>{s.setNum}</strong>
+                    <span>{s.name ?? ""}</span>
+                  </div>
+                  <ScoreBar
+                    score={s.coverage}
+                    label={`${Math.round(s.coverage * 100)}%`}
+                  />
+                  <div className="muted small">
+                    {s.distinctPartsMatched} of {ranking.observedParts} scanned
+                    parts
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">
+            None of the scanned bricks appear in your synced sets yet.
+          </p>
+        )}
+
+        {observationList.length > 0 && (
+          <>
             <h3>Bricks seen ({observationList.length})</h3>
             <ul className="observation-list">
               {observationList.map((o) => (
@@ -277,7 +368,8 @@ export function ScanPage() {
                   <div>
                     <div>{o.name}</div>
                     <div className="muted small">
-                      #{o.partNum} · seen {o.hits}× · best {Math.round(o.bestScore * 100)}%
+                      #{o.partNum} · seen {o.hits}× · best{" "}
+                      {Math.round(o.bestScore * 100)}%
                     </div>
                   </div>
                 </li>
@@ -290,13 +382,45 @@ export function ScanPage() {
   );
 }
 
+/** The colours and piece counts this brick appears as inside one set. */
+function MatchColors({ matches }: { matches: SetMatch["matches"] }) {
+  const byColor = new Map<
+    string,
+    { name: string | null; hex: string | null; quantity: number }
+  >();
+  for (const m of matches) {
+    const key = m.colorName ?? m.partNum;
+    const entry = byColor.get(key);
+    if (entry) entry.quantity += m.quantity;
+    else byColor.set(key, { name: m.colorName, hex: m.colorHex, quantity: m.quantity });
+  }
+  return (
+    <div className="inv-meta">
+      {[...byColor.entries()].map(([key, c]) => (
+        <span key={key} className="inv-color">
+          <span
+            className="swatch"
+            style={{ background: c.hex ? `#${c.hex}` : "transparent" }}
+          />
+          {c.name ?? "Unknown colour"} ×{c.quantity}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ScoreBar({ score, label }: { score: number; label?: string }) {
   return (
     <div className="score">
       <div className="score-track">
-        <div className="score-fill" style={{ width: `${Math.round(score * 100)}%` }} />
+        <div
+          className="score-fill"
+          style={{ width: `${Math.round(score * 100)}%` }}
+        />
       </div>
-      <span className="score-label">{label ?? `${Math.round(score * 100)}%`}</span>
+      <span className="score-label">
+        {label ?? `${Math.round(score * 100)}%`}
+      </span>
     </div>
   );
 }
