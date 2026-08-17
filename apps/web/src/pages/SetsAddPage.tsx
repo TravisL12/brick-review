@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { api } from '../lib/api';
 import type { ImportResult, LegoSet, SetsStats } from '../lib/types';
+import { thumbSources } from '../lib/images';
 
 const PLACEHOLDER = `Paste set numbers any way you like:
 
@@ -168,7 +169,13 @@ export function SetsAddPage() {
             {sets.map((set) => (
               <li key={set.id} className="set-row">
                 {set.imgUrl ? (
-                  <img src={set.imgUrl} alt="" className="set-thumb" loading="lazy" />
+                  <img
+                    {...thumbSources(set.imgUrl)}
+                    sizes="64px"
+                    alt=""
+                    className="set-thumb"
+                    loading="lazy"
+                  />
                 ) : (
                   <div className="set-thumb placeholder" aria-hidden="true" />
                 )}

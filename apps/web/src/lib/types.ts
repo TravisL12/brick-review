@@ -14,6 +14,14 @@ export interface LegoSet {
   inventoryLines: number;
 }
 
+export interface SetImage {
+  id: string;
+  url: string;
+  /** Source-provided thumbnail; Rebrickable images derive theirs from the URL. */
+  thumbUrl: string | null;
+  source: 'rebrickable' | 'brickset' | string;
+}
+
 export interface SetSummary {
   inventoryLines: number;
   totalPieces: number;
@@ -24,6 +32,7 @@ export interface SetSummary {
 }
 
 export interface SetDetail extends Omit<LegoSet, 'inventoryLines'> {
+  images: SetImage[];
   summary: SetSummary;
 }
 
@@ -53,6 +62,7 @@ export interface SetsStats {
   inventoryLines: number;
   distinctParts: number;
   rebrickableKeyConfigured: boolean;
+  bricksetKeyConfigured: boolean;
 }
 
 export interface ImportResult {

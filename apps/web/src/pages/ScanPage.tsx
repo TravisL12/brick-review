@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { CameraCapture } from "../components/CameraCapture";
 import { api } from "../lib/api";
+import { thumbSources } from "../lib/images";
 import type {
   Candidate,
   IdentifyResponse,
@@ -294,24 +296,30 @@ export function ScanPage() {
             <ul className="ranked-list">
               {result.setMatches.map((m) => (
                 <li key={m.setNum}>
-                  {m.imgUrl ? (
-                    <img
-                      src={m.imgUrl}
-                      alt=""
-                      className="set-thumb"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="set-thumb placeholder" aria-hidden="true" />
-                  )}
-                  <div className="ranked-info">
-                    <div className="candidate-title">
-                      <strong>{m.setNum}</strong>
-                      <span>{m.name ?? ""}</span>
+                  <SetLink setNum={m.setNum}>
+                    {m.imgUrl ? (
+                      <img
+                        {...thumbSources(m.imgUrl)}
+                        sizes="80px"
+                        alt=""
+                        className="set-thumb"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div
+                        className="set-thumb placeholder"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <div className="ranked-info">
+                      <div className="candidate-title">
+                        <strong>{m.setNum}</strong>
+                        <span>{m.name ?? ""}</span>
+                      </div>
+                      <ScoreBar score={m.bestScore} />
+                      <MatchColors matches={m.matches} />
                     </div>
-                    <ScoreBar score={m.bestScore} />
-                    <MatchColors matches={m.matches} />
-                  </div>
+                  </SetLink>
                 </li>
               ))}
             </ul>
@@ -325,30 +333,33 @@ export function ScanPage() {
           <ul className="ranked-list">
             {ranking.sets.slice(0, 10).map((s) => (
               <li key={s.setNum}>
-                {s.imgUrl ? (
-                  <img
-                    src={s.imgUrl}
-                    alt=""
-                    className="set-thumb"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="set-thumb placeholder" aria-hidden="true" />
-                )}
-                <div className="ranked-info">
-                  <div className="candidate-title">
-                    <strong>{s.setNum}</strong>
-                    <span>{s.name ?? ""}</span>
+                <SetLink setNum={s.setNum}>
+                  {s.imgUrl ? (
+                    <img
+                      {...thumbSources(s.imgUrl)}
+                      sizes="80px"
+                      alt=""
+                      className="set-thumb"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="set-thumb placeholder" aria-hidden="true" />
+                  )}
+                  <div className="ranked-info">
+                    <div className="candidate-title">
+                      <strong>{s.setNum}</strong>
+                      <span>{s.name ?? ""}</span>
+                    </div>
+                    <ScoreBar
+                      score={s.coverage}
+                      label={`${Math.round(s.coverage * 100)}%`}
+                    />
+                    <div className="muted small">
+                      {s.distinctPartsMatched} of {ranking.observedParts} scanned
+                      parts
+                    </div>
                   </div>
-                  <ScoreBar
-                    score={s.coverage}
-                    label={`${Math.round(s.coverage * 100)}%`}
-                  />
-                  <div className="muted small">
-                    {s.distinctPartsMatched} of {ranking.observedParts} scanned
-                    parts
-                  </div>
-                </div>
+                </SetLink>
               </li>
             ))}
           </ul>
@@ -379,6 +390,30 @@ export function ScanPage() {
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * A matched set opens in a new tab, so a scanning session is never interrupted —
+ * the camera keeps its stream and the session tally survives.
+ */
+function SetLink({
+  setNum,
+  children,
+}: {
+  setNum: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      className="ranked-row"
+      to={`/sets/${encodeURIComponent(setNum)}`}
+      target="_blank"
+      rel="noreferrer"
+      title={`Open ${setNum} in a new tab`}
+    >
+      {children}
+    </Link>
   );
 }
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RebrickableService } from '../rebrickable/rebrickable.service';
+import { BricksetService } from '../brickset/brickset.service';
 import { parseSetNumList } from '../common/set-num.util';
 import type { ImportSetsDto } from './dto';
 
@@ -14,6 +15,7 @@ export class SetsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rebrickable: RebrickableService,
+    private readonly brickset: BricksetService,
   ) {}
 
   async list() {
@@ -44,6 +46,7 @@ export class SetsService implements OnModuleInit {
       inventoryLines: parts,
       distinctParts: distinct.length,
       rebrickableKeyConfigured: this.rebrickable.isConfigured(),
+      bricksetKeyConfigured: this.brickset.isConfigured(),
     };
   }
 
@@ -74,8 +77,14 @@ export class SetsService implements OnModuleInit {
     };
   }
 
-  /** Older rows were synced before theme names existed; fill them in once at boot. */
+  /** Older rows were synced before theme names and image lists existed. */
   async onModuleInit(): Promise<void> {
+    await this.backfillThemeNames();
+    // Both take minutes across a whole collection; neither may hold up boot.
+    void this.backfillImages().then(() => this.warmThumbnails());
+  }
+
+  private async backfillThemeNames(): Promise<void> {
     if (!this.rebrickable.isConfigured()) return;
     const stale = await this.prisma.legoSet.findMany({
       where: { themeName: null, themeId: { not: null } },
@@ -92,9 +101,63 @@ export class SetsService implements OnModuleInit {
     this.logger.log(`Backfilled theme names for ${stale.length} set(s)`);
   }
 
+  /**
+   * Sets synced before Brickset support have no picture rows. Fill them in once,
+   * without a full resync — the inventory they already hold is still good.
+   */
+  private async backfillImages(): Promise<void> {
+    if (!this.brickset.isConfigured()) return;
+    const missing = await this.prisma.legoSet.findMany({
+      where: { syncStatus: 'ready', images: { none: {} } },
+      select: { id: true, setNum: true, imgUrl: true, bricksetId: true },
+    });
+    if (missing.length === 0) return;
+
+    this.logger.log(`Backfilling images for ${missing.length} set(s)…`);
+    let filled = 0;
+    for (const set of missing) {
+      try {
+        const bricksetId = await this.syncImages(set.id, set.setNum, set.imgUrl, set.bricksetId);
+        if (bricksetId !== set.bricksetId) {
+          await this.prisma.legoSet.update({ where: { id: set.id }, data: { bricksetId } });
+        }
+        filled += 1;
+      } catch (err) {
+        this.logger.warn(`Image backfill failed for ${set.setNum}: ${String(err)}`);
+      }
+    }
+    this.logger.log(`Backfilled images for ${filled} set(s)`);
+  }
+
+  /**
+   * Rebrickable renders thumbnails on demand, so a set synced before warming
+   * existed still has cold gallery sizes. Re-warming is idempotent and costs
+   * ~35ms per already-warm preset, so it is cheap enough to simply run at boot.
+   */
+  private async warmThumbnails(): Promise<void> {
+    const sets = await this.prisma.legoSet.findMany({
+      where: { imgUrl: { not: null } },
+      select: { setNum: true, imgUrl: true },
+    });
+    if (sets.length === 0) return;
+
+    const startedAt = Date.now();
+    for (const set of sets) await this.rebrickable.warmThumbs(set.imgUrl);
+    const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+    this.logger.log(`Warmed gallery thumbnails for ${sets.length} set(s) in ${seconds}s`);
+  }
+
   /** One set with aggregate inventory figures for the detail page. */
   async findOne(setNum: string) {
-    const set = await this.prisma.legoSet.findUnique({ where: { setNum } });
+    const set = await this.prisma.legoSet.findUnique({
+      where: { setNum },
+      include: {
+        images: {
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, url: true, thumbUrl: true, source: true },
+        },
+      },
+    });
     if (!set) throw new NotFoundException(`Set ${setNum} is not in the collection`);
 
     const parts = await this.prisma.setPart.findMany({
@@ -107,6 +170,14 @@ export class SetsService implements OnModuleInit {
 
     return {
       ...set,
+      // Rows synced before image support have no SetImage children; show the one
+      // picture they do have rather than an empty carousel.
+      images:
+        set.images.length > 0
+          ? set.images
+          : set.imgUrl
+            ? [{ id: `${set.id}-primary`, url: set.imgUrl, thumbUrl: null, source: 'rebrickable' }]
+            : [],
       summary: {
         inventoryLines: parts.length,
         totalPieces: regular.reduce((sum, p) => sum + p.quantity, 0),
@@ -265,7 +336,7 @@ export class SetsService implements OnModuleInit {
         });
 
         try {
-          await this.syncOne(next.id, next.setNum);
+          await this.syncOne(next);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this.logger.error(`Sync failed for ${next.setNum}: ${message}`);
@@ -280,7 +351,8 @@ export class SetsService implements OnModuleInit {
     }
   }
 
-  private async syncOne(setId: string, setNum: string): Promise<void> {
+  private async syncOne(set: { id: string; setNum: string; bricksetId: number | null }): Promise<void> {
+    const { id: setId, setNum } = set;
     const details = await this.rebrickable.getSet(setNum);
     const inventory = await this.rebrickable.getSetParts(setNum);
     const themeName = await this.rebrickable.getThemePath(details.theme_id);
@@ -344,6 +416,13 @@ export class SetsService implements OnModuleInit {
 
     await this.saveAliases([...aliases.values()]);
 
+    const bricksetId = await this.syncImages(
+      setId,
+      setNum,
+      details.set_img_url,
+      set.bricksetId,
+    );
+
     await this.prisma.legoSet.update({
       where: { id: setId },
       data: {
@@ -353,6 +432,7 @@ export class SetsService implements OnModuleInit {
         themeName,
         numParts: details.num_parts,
         imgUrl: details.set_img_url,
+        bricksetId,
         syncStatus: 'ready',
         syncError: null,
         lastSyncedAt: new Date(),
@@ -360,6 +440,52 @@ export class SetsService implements OnModuleInit {
     });
 
     this.logger.log(`Synced ${setNum}: ${rows.length} inventory lines, ${aliases.size} aliases`);
+  }
+
+  /**
+   * Rebuilds a set's picture list: the Rebrickable box shot first, then Brickset's
+   * additional photos. Returns the Brickset id so the caller can cache it.
+   */
+  private async syncImages(
+    setId: string,
+    setNum: string,
+    rebrickableImg: string | null,
+    knownBricksetId: number | null,
+  ): Promise<number | null> {
+    const rows: { url: string; thumbUrl: string | null; source: string; sortOrder: number }[] = [];
+
+    if (rebrickableImg) {
+      rows.push({ url: rebrickableImg, thumbUrl: null, source: 'rebrickable', sortOrder: 0 });
+    }
+
+    const { bricksetId, images } = await this.brickset.getSetImages(setNum, knownBricksetId);
+    for (const img of images) {
+      rows.push({
+        url: img.url,
+        thumbUrl: img.thumbUrl,
+        source: 'brickset',
+        sortOrder: rows.length,
+      });
+    }
+
+    // (setId, url) is unique, and the two sources can point at the same file.
+    const seen = new Set<string>();
+    const unique = rows.filter((row) => {
+      if (seen.has(row.url)) return false;
+      seen.add(row.url);
+      return true;
+    });
+
+    await this.prisma.setImage.deleteMany({ where: { setId } });
+    if (unique.length > 0) {
+      await this.prisma.setImage.createMany({
+        data: unique.map((row) => ({ ...row, setId })),
+      });
+    }
+
+    // Have the CDN render the gallery sizes now rather than under the first viewer.
+    await this.rebrickable.warmThumbs(rebrickableImg);
+    return bricksetId;
   }
 
   /** SQLite has no createMany(skipDuplicates), so filter against what is already stored. */

@@ -1,5 +1,10 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  WARM_PRESETS,
+  isRebrickableMedia,
+  rebrickableThumb,
+} from '../common/rebrickable-image.util';
 import type {
   RebrickableInventoryPart,
   RebrickablePage,
@@ -12,6 +17,8 @@ const BASE_URL = 'https://rebrickable.com/api/v3';
 /** Rebrickable allows ~1 req/s and bans repeat offenders, so serialise with a gap. */
 const MIN_INTERVAL_MS = 1100;
 const MAX_RETRIES = 3;
+/** A hung CDN must not stall a sync. */
+const WARM_TIMEOUT_MS = 5000;
 
 @Injectable()
 export class RebrickableService {
@@ -150,6 +157,31 @@ export class RebrickableService {
   getSet(setNum: string): Promise<RebrickableSet> {
     this.assertConfigured();
     return this.request<RebrickableSet>(`/lego/sets/${encodeURIComponent(setNum)}/`);
+  }
+
+  /**
+   * Rebrickable renders /media/thumbs/ sizes on demand: the first request for a
+   * given image+preset pays 0.2-0.8s of server-side resize, every later one is
+   * ~35ms from the edge. A HEAD is enough to trigger that work without pulling
+   * the body down, so warming at sync time means the gallery never pays the
+   * cold cost in front of the user.
+   *
+   * Best-effort by design — this is the CDN, not the rate-limited API, so it
+   * deliberately bypasses the request queue rather than starving real calls.
+   */
+  async warmThumbs(imgUrl: string | null | undefined): Promise<void> {
+    if (!imgUrl || !isRebrickableMedia(imgUrl)) return;
+
+    for (const preset of WARM_PRESETS) {
+      try {
+        await fetch(rebrickableThumb(imgUrl, preset), {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(WARM_TIMEOUT_MS),
+        });
+      } catch {
+        // A cold thumbnail only costs the first viewer a moment; never fail a sync for it.
+      }
+    }
   }
 
   /** Walks every inventory page for a set. */

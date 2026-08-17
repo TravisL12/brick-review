@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { LegoSet } from '../lib/types';
+import { tileSources } from '../lib/images';
 
 type SortKey = 'recent' | 'name' | 'setNum' | 'year' | 'parts';
 
@@ -152,7 +153,12 @@ export function SetsGalleryPage() {
               <Link className="tile" to={`/sets/${encodeURIComponent(set.setNum)}`}>
                 <div className="tile-art">
                   {set.imgUrl ? (
-                    <img src={set.imgUrl} alt={set.name ?? set.setNum} loading="lazy" />
+                    <img
+                      {...tileSources(set.imgUrl)}
+                      sizes="(max-width: 640px) 45vw, 300px"
+                      alt={set.name ?? set.setNum}
+                      loading="lazy"
+                    />
                   ) : (
                     <div className="tile-placeholder" aria-hidden="true" />
                   )}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { SetImageCarousel } from '../components/SetImageCarousel';
 import { api } from '../lib/api';
 import type { InventoryPart, SetDetail } from '../lib/types';
 
@@ -133,13 +134,7 @@ export function SetDetailPage() {
       </Link>
 
       <section className="detail-hero card">
-        <div className="detail-art">
-          {set.imgUrl ? (
-            <img src={set.imgUrl} alt={set.name ?? set.setNum} />
-          ) : (
-            <div className="tile-placeholder" aria-hidden="true" />
-          )}
-        </div>
+        <SetImageCarousel images={set.images} alt={set.name ?? set.setNum} />
 
         <div className="detail-info">
           <div className="detail-title">

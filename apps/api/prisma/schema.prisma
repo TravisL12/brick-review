@@ -18,6 +18,8 @@ model LegoSet {
   themeName    String?
   numParts     Int?
   imgUrl       String?
+  /// Brickset's internal numeric set id, cached so image syncs skip the lookup call.
+  bricksetId   Int?
   /// pending | syncing | ready | error
   syncStatus   String    @default("pending")
   syncError    String?
@@ -25,9 +27,30 @@ model LegoSet {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  parts SetPart[]
+  parts  SetPart[]
+  images SetImage[]
 
   @@index([syncStatus])
+}
+
+/// One picture of a set. The Rebrickable box shot is sortOrder 0; Brickset's
+/// additional images (alternate angles, build shots) follow.
+model SetImage {
+  id     String  @id @default(cuid())
+  setId  String
+  set    LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  /// Full-resolution image URL.
+  url       String
+  /// Source-provided thumbnail, when there is one. Rebrickable URLs are resized
+  /// client-side via its /media/thumbs/ transform instead, so they leave this null.
+  thumbUrl  String?
+  /// "rebrickable" | "brickset"
+  source    String
+  sortOrder Int     @default(0)
+
+  @@unique([setId, url])
+  @@index([setId, sortOrder])
 }
 
 /// One line of a set's parts inventory.
