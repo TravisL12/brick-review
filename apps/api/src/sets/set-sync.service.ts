@@ -111,17 +111,53 @@ export class SetSyncService {
     }
   }
 
+  /**
+   * Replaces a set's minifig list. Kept off the main sync path's failure route on
+   * purpose: a set is still perfectly usable without its fig list, so a failure
+   * here is logged and the previously stored figs are left alone rather than
+   * dropping the whole sync — and the set back to `error` — over a side dish.
+   *
+   * Returns how many figs were stored, or null if the lookup failed, so the caller
+   * only stamps `minifigsSyncedAt` on success and the backfill can retry otherwise.
+   */
+  async syncMinifigs(setId: string, setNum: string): Promise<number | null> {
+    let figs;
+    try {
+      figs = await this.rebrickable.getSetMinifigs(setNum);
+    } catch (err) {
+      this.logger.warn(`Minifig sync failed for ${setNum}: ${String(err)}`);
+      return null;
+    }
+
+    await this.prisma.setMinifig.deleteMany({ where: { setId } });
+    if (figs.length > 0) {
+      await this.prisma.setMinifig.createMany({
+        data: figs.map((fig) => ({
+          setId,
+          figNum: fig.set_num,
+          name: fig.set_name,
+          imgUrl: fig.set_img_url,
+          quantity: fig.quantity,
+        })),
+      });
+      // The fig gallery reaches for the same presets the set gallery does.
+      for (const fig of figs) await this.rebrickable.warmThumbs(fig.set_img_url);
+    }
+    return figs.length;
+  }
+
   private async syncOne(set: QueuedSet): Promise<void> {
     const { id: setId, setNum } = set;
     const details = await this.rebrickable.getSet(setNum);
     const inventory = await this.rebrickable.getSetParts(setNum);
     const themeName = await this.rebrickable.getThemePath(details.theme_id);
+    const figCount = await this.syncMinifigs(setId, setNum);
 
-    const { lines, aliases } = mapInventory(setId, inventory);
+    const { lines, aliases } = mapInventory(inventory);
 
     await this.prisma.setPart.deleteMany({ where: { setId } });
     for (const batch of chunk(lines)) {
-      await this.prisma.setPart.createMany({ data: batch });
+      await this.prisma.setPart.createMany({ data: batch.map((line) => ({ ...line, setId })) });
     }
 
     await this.aliases.saveParts(aliases);
@@ -146,9 +182,13 @@ export class SetSyncService {
         syncStatus: 'ready',
         syncError: null,
         lastSyncedAt: new Date(),
+        ...(figCount != null ? { minifigsSyncedAt: new Date() } : {}),
       },
     });
 
-    this.logger.log(`Synced ${setNum}: ${lines.length} inventory lines, ${aliases.length} aliases`);
+    this.logger.log(
+      `Synced ${setNum}: ${lines.length} inventory lines, ${aliases.length} aliases, ` +
+        `${figCount ?? 'no'} minifigs`,
+    );
   }
 }

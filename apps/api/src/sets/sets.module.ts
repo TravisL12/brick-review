@@ -15,6 +15,6 @@ import { CatalogAliasService } from './catalog-alias.service';
     SetBackfillService,
     CatalogAliasService,
   ],
-  exports: [SetsService],
+  exports: [SetsService, CatalogAliasService],
 })
 export class SetsModule {}

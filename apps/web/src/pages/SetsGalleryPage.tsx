@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { SetArt } from '../components/SetArt';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { api } from '../lib/api';
+import { downloadCsv, toCsv } from '../lib/csv';
 import type { LegoSet } from '../lib/types';
 
 type SortKey = 'recent' | 'name' | 'setNum' | 'year' | 'parts';
 
 /** Stable identity so the filter memos below do not rerun while loading. */
 const NO_SETS: LegoSet[] = [];
+
+const DEFAULT_SORT: SortKey = 'recent';
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'recent', label: 'Recently added' },
@@ -22,9 +25,32 @@ export function SetsGalleryPage() {
   const { data, loading, error } = useAsyncData(() => api.listSets(), []);
   const sets = data ?? NO_SETS;
 
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SortKey>('recent');
-  const [theme, setTheme] = useState('');
+  // Filters live in the query string so a filtered view can be linked, bookmarked and
+  // restored by the back button.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get('q') ?? '';
+  const theme = searchParams.get('theme') ?? '';
+  const sortParam = searchParams.get('sort');
+  const sort: SortKey = SORTS.some((s) => s.key === sortParam)
+    ? (sortParam as SortKey)
+    : DEFAULT_SORT;
+
+  // Defaults are dropped rather than written out, so the tidy /sets URL stays tidy. Replacing
+  // instead of pushing keeps every keystroke out of the history stack.
+  const setParam = useCallback(
+    (key: string, value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value) next.set(key, value);
+          else next.delete(key);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   // Top-level theme only ("Ninjago" out of "Ninjago > Dragons Rising") to keep the filter short.
   const themes = useMemo(() => {
@@ -35,6 +61,13 @@ export function SetsGalleryPage() {
     }
     return [...found].sort((a, b) => a.localeCompare(b));
   }, [sets]);
+
+  // A theme from the URL that no longer matches any set still gets an option, so the select
+  // reflects the filter actually being applied instead of silently showing "All themes".
+  const themeOptions = useMemo(
+    () => (theme && !themes.includes(theme) ? [theme, ...themes] : themes),
+    [themes, theme],
+  );
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -66,6 +99,25 @@ export function SetsGalleryPage() {
     });
     return sorted;
   }, [sets, query, sort, theme]);
+
+  // Exports what is on screen, so the filters double as the way to choose what goes in the file.
+  function handleExport() {
+    const rows: (string | number | null)[][] = [
+      ['Set number', 'Name', 'Year', 'Theme', 'Pieces', 'Inventory lines', 'Status', 'Added'],
+      ...visible.map((set) => [
+        set.setNum,
+        set.name,
+        set.year,
+        set.themeName,
+        set.numParts,
+        set.inventoryLines,
+        set.syncStatus,
+        set.createdAt.slice(0, 10),
+      ]),
+    ];
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`my-sets-${stamp}.csv`, toCsv(rows));
+  }
 
   const totalPieces = useMemo(
     () => sets.reduce((sum, s) => sum + (s.numParts ?? 0), 0),
@@ -105,25 +157,33 @@ export function SetsGalleryPage() {
             type="search"
             placeholder="Search name, number, theme…"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setParam('q', e.target.value)}
           />
-          {themes.length > 1 && (
-            <select value={theme} onChange={(e) => setTheme(e.target.value)}>
+          {themeOptions.length > 1 && (
+            <select value={theme} onChange={(e) => setParam('theme', e.target.value)}>
               <option value="">All themes</option>
-              {themes.map((t) => (
+              {themeOptions.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
             </select>
           )}
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+          <select
+            value={sort}
+            onChange={(e) =>
+              setParam('sort', e.target.value === DEFAULT_SORT ? '' : e.target.value)
+            }
+          >
             {SORTS.map((s) => (
               <option key={s.key} value={s.key}>
                 {s.label}
               </option>
             ))}
           </select>
+          <button type="button" onClick={handleExport} disabled={visible.length === 0}>
+            Export CSV
+          </button>
           <Link className="button-link" to="/sets/add">
             Add sets
           </Link>

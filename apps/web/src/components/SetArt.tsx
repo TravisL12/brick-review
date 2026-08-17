@@ -5,7 +5,7 @@ import { heroSources, thumbSources, tileSources, type ImageSources } from '../li
  * to `sizes` and the class the stylesheet sizes the box with always travel
  * together, so a variant fixes all three instead of exposing them as props.
  */
-export type SetArtVariant = 'tile' | 'hero' | 'row' | 'ranked' | 'strip';
+export type SetArtVariant = 'tile' | 'hero' | 'row' | 'ranked' | 'strip' | 'fig' | 'figRow';
 
 interface VariantSpec {
   sources: (url: string) => ImageSources;
@@ -43,6 +43,20 @@ const VARIANTS: Record<SetArtVariant, VariantSpec> = {
     sizes: '80px',
     className: 'set-thumb',
     placeholderClassName: 'set-thumb placeholder',
+    loading: 'lazy',
+  },
+  /** Minifig gallery tile. Figs are shot small, so the thumb ladder is plenty. */
+  fig: {
+    sources: thumbSources,
+    sizes: '150px',
+    placeholderClassName: 'tile-placeholder',
+    loading: 'lazy',
+  },
+  /** Minifig strip on the set detail page. */
+  figRow: {
+    sources: thumbSources,
+    sizes: '72px',
+    placeholderClassName: 'tile-placeholder',
     loading: 'lazy',
   },
   /** Detail carousel filmstrip. */

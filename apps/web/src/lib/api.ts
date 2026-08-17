@@ -3,6 +3,8 @@ import type {
   IdentifyResponse,
   InventoryPart,
   LegoSet,
+  MinifigDetail,
+  MinifigSummary,
   RankResponse,
   SetDetail,
   SetsStats,
@@ -42,6 +44,16 @@ export const api = {
   getSetParts: (setNum: string) =>
     fetch(`${BASE}/sets/${encodeURIComponent(setNum)}/parts`).then((r) =>
       handle<InventoryPart[]>(r),
+    ),
+
+  listMinifigs: () => fetch(`${BASE}/minifigs`).then((r) => handle<MinifigSummary[]>(r)),
+
+  getMinifig: (figNum: string) =>
+    fetch(`${BASE}/minifigs/${encodeURIComponent(figNum)}`).then((r) => handle<MinifigDetail>(r)),
+
+  resyncMinifig: (figNum: string) =>
+    fetch(`${BASE}/minifigs/${encodeURIComponent(figNum)}/resync`, { method: 'POST' }).then((r) =>
+      handle<MinifigDetail>(r),
     ),
 
   importSets: (text: string) =>

@@ -91,3 +91,11 @@ export function tileSources(url: string): ImageSources {
 export function heroSources(url: string): ImageSources {
   return setImageSources(url, LARGE_LADDER, { includeOriginal: true });
 }
+
+/**
+ * Rebrickable files minifigs under /minifigs/, keyed by the same "fig-002544"
+ * number the set inventory returns.
+ */
+export function rebrickableFigUrl(figNum: string): string {
+  return `https://rebrickable.com/minifigs/${encodeURIComponent(figNum)}/`;
+}

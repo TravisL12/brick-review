@@ -372,9 +372,90 @@ ul { list-style: none; margin: 0; padding: 0; }
 .inv-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; margin-top: 4px; }
 .inv-color { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
 .swatch {
-  width: 11px; height: 11px; border-radius: 3px; display: inline-block;
-  border: 1px solid rgba(255,255,255,0.25); flex-shrink: 0;
+  width: 16px; height: 16px; border-radius: 4px; display: inline-block;
+  border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
 }
+
+/* ---------- minifigs: set detail strip ---------- */
+.fig-strip {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+.fig-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%;
+  padding: 10px; text-decoration: none; color: inherit; text-align: center;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.fig-card:hover { border-color: var(--accent); }
+.fig-art { position: relative; }
+.fig-art img, .fig-art .tile-placeholder {
+  width: 72px; height: 72px; object-fit: contain; background: #fff; border-radius: 8px;
+}
+/* Two lines, then ellipsis: fig names run long ("C-3PO, Pearl Gold, Printed Legs"). */
+.fig-name {
+  font-size: 12px; line-height: 1.3; font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.fig-num { font-size: 11px; color: var(--muted); margin-top: auto; }
+
+/* ---------- minifigs: detail ---------- */
+/* Figs are shot portrait and small, so the hero is narrower than a set's box art. */
+.fig-hero { grid-template-columns: minmax(0, 280px) minmax(0, 1fr); }
+@media (max-width: 780px) { .fig-hero { grid-template-columns: 1fr; } }
+.fig-hero-art {
+  position: relative; background: #fff; border-radius: 10px;
+  aspect-ratio: 3 / 4; overflow: hidden;
+}
+.fig-hero-art img, .fig-hero-art .tile-placeholder {
+  position: absolute; inset: 16px; width: calc(100% - 32px); height: calc(100% - 32px);
+  object-fit: contain;
+}
+
+.fig-owner-list {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.fig-owner {
+  display: flex; gap: 12px; align-items: center; padding: 10px; height: 100%;
+  text-decoration: none; color: inherit;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.fig-owner:hover { border-color: var(--accent); }
+/* Art comes from SetArt's `row` variant, already sized by `.set-thumb` above. */
+
+/* ---------- minifigs: gallery ---------- */
+.fig-gallery {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+.fig-tile {
+  display: flex; flex-direction: column; height: 100%;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; transition: border-color 0.12s ease;
+}
+.fig-tile:hover { border-color: var(--accent); }
+.fig-tile-art {
+  position: relative; display: block; aspect-ratio: 1 / 1; background: #fff;
+}
+.fig-tile-art img, .fig-tile-art .tile-placeholder {
+  position: absolute; inset: 10px; width: calc(100% - 20px); height: calc(100% - 20px);
+  object-fit: contain;
+}
+.fig-count { background: rgba(20,20,20,0.72); color: #fff; }
+.fig-tile-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.fig-tile-name { font-size: 13px; font-weight: 600; line-height: 1.3; color: inherit; text-decoration: none; }
+.fig-tile-name:hover { color: var(--accent); }
+.fig-sets {
+  list-style: none; margin: 6px 0 0; padding: 6px 0 0; margin-top: auto;
+  border-top: 1px solid var(--border); font-size: 11px; color: var(--muted);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.fig-sets a { color: var(--muted); text-decoration: none; }
+.fig-sets a:hover { color: var(--accent); }
 
 /* ---------- part catalogue links ---------- */
 .inv-links {

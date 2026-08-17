@@ -1,5 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { SetsGalleryPage } from './pages/SetsGalleryPage';
+import { MinifigsGalleryPage } from './pages/MinifigsGalleryPage';
+import { MinifigDetailPage } from './pages/MinifigDetailPage';
 import { SetsAddPage } from './pages/SetsAddPage';
 import { SetDetailPage } from './pages/SetDetailPage';
 import { ScanPage } from './pages/ScanPage';
@@ -18,6 +20,10 @@ export function App() {
             My sets
           </NavLink>
           <NavLink to="/sets/add">Add sets</NavLink>
+          {/* `end` so the gallery link is not left active on /minifigs/:figNum */}
+          <NavLink to="/minifigs" end>
+            Minifigs
+          </NavLink>
           <NavLink to="/scan">Scan bricks</NavLink>
         </nav>
       </header>
@@ -29,6 +35,8 @@ export function App() {
           {/* Static segment is matched ahead of the dynamic one by the router's ranking. */}
           <Route path="/sets/add" element={<SetsAddPage />} />
           <Route path="/sets/:setNum" element={<SetDetailPage />} />
+          <Route path="/minifigs" element={<MinifigsGalleryPage />} />
+          <Route path="/minifigs/:figNum" element={<MinifigDetailPage />} />
           <Route path="/scan" element={<ScanPage />} />
           <Route path="*" element={<Navigate to="/sets" replace />} />
         </Routes>

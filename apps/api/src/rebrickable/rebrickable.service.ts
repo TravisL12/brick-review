@@ -10,7 +10,9 @@ import type {
   RebrickableInventoryPart,
   RebrickablePage,
   RebrickableColorDetail,
+  RebrickableMinifig,
   RebrickableSet,
+  RebrickableSetMinifig,
   RebrickableTheme,
 } from './rebrickable.types';
 
@@ -173,22 +175,66 @@ export class RebrickableService {
     }
   }
 
+  /**
+   * The minifigs packed with a set. Sets that ship none answer 200 with an empty
+   * page, so an empty array here means "none", not "lookup failed".
+   */
+  async getSetMinifigs(setNum: string): Promise<RebrickableSetMinifig[]> {
+    this.assertConfigured();
+    const all: RebrickableSetMinifig[] = [];
+    let page = 1;
+
+    for (;;) {
+      const res = await this.request<RebrickablePage<RebrickableSetMinifig>>(
+        `/lego/sets/${encodeURIComponent(setNum)}/minifigs/`,
+        { page, page_size: 1000 },
+      );
+      all.push(...res.results);
+      if (!res.next) break;
+      page += 1;
+      if (page > 10) {
+        this.logger.warn(`Stopped paging ${setNum} minifigs at 10 pages`);
+        break;
+      }
+    }
+    return all;
+  }
+
+  getMinifig(figNum: string): Promise<RebrickableMinifig> {
+    this.assertConfigured();
+    return this.request<RebrickableMinifig>(`/lego/minifigs/${encodeURIComponent(figNum)}/`);
+  }
+
   /** Walks every inventory page for a set. */
-  async getSetParts(setNum: string): Promise<RebrickableInventoryPart[]> {
+  getSetParts(setNum: string): Promise<RebrickableInventoryPart[]> {
+    return this.getInventoryParts(`/lego/sets/${encodeURIComponent(setNum)}/parts/`, setNum);
+  }
+
+  /** The pieces a minifig is built from. Same inventory shape as a set's. */
+  getMinifigParts(figNum: string): Promise<RebrickableInventoryPart[]> {
+    return this.getInventoryParts(`/lego/minifigs/${encodeURIComponent(figNum)}/parts/`, figNum);
+  }
+
+  private async getInventoryParts(
+    path: string,
+    label: string,
+  ): Promise<RebrickableInventoryPart[]> {
     this.assertConfigured();
     const all: RebrickableInventoryPart[] = [];
     let page = 1;
 
     for (;;) {
-      const res = await this.request<RebrickablePage<RebrickableInventoryPart>>(
-        `/lego/sets/${encodeURIComponent(setNum)}/parts/`,
-        { page, page_size: 1000, inc_part_details: 1, inc_color_details: 1 },
-      );
+      const res = await this.request<RebrickablePage<RebrickableInventoryPart>>(path, {
+        page,
+        page_size: 1000,
+        inc_part_details: 1,
+        inc_color_details: 1,
+      });
       all.push(...res.results);
       if (!res.next) break;
       page += 1;
       if (page > 50) {
-        this.logger.warn(`Stopped paging ${setNum} inventory at 50 pages`);
+        this.logger.warn(`Stopped paging ${label} inventory at 50 pages`);
         break;
       }
     }

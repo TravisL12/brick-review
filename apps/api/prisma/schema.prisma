@@ -24,11 +24,15 @@ model LegoSet {
   syncStatus   String    @default("pending")
   syncError    String?
   lastSyncedAt DateTime?
+  /// When the minifig list was last pulled. Null means "never asked", which is what
+  /// separates a set with genuinely no minifigs from one synced before they existed.
+  minifigsSyncedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  parts  SetPart[]
-  images SetImage[]
+  parts    SetPart[]
+  images   SetImage[]
+  minifigs SetMinifig[]
 
   @@index([syncStatus])
 }
@@ -51,6 +55,64 @@ model SetImage {
 
   @@unique([setId, url])
   @@index([setId, sortOrder])
+}
+
+/// One minifigure that ships with a set. Rebrickable models figs as their own
+/// mini-sets ("fig-002544"), so the fig number is a set number in its catalogue.
+model SetMinifig {
+  id    String  @id @default(cuid())
+  setId String
+  set   LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  /// Rebrickable fig number, e.g. "fig-002544"
+  figNum   String
+  name     String?
+  imgUrl   String?
+  quantity Int     @default(1)
+
+  @@unique([setId, figNum])
+  @@index([figNum])
+  @@index([setId])
+}
+
+/// A minifigure as a catalogue entry in its own right, cached the first time its
+/// page is opened. `SetMinifig` stays the "which sets ship it" join; this holds
+/// what Rebrickable knows about the fig itself.
+model Minifig {
+  id        String    @id @default(cuid())
+  /// Rebrickable fig number, e.g. "fig-002544"
+  figNum    String    @unique
+  name      String?
+  imgUrl    String?
+  numParts  Int?
+  /// When the fig's own parts inventory was pulled. Null means never, which is
+  /// what makes the first page view fetch it and later ones read the cache.
+  partsSyncedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  parts MinifigPart[]
+}
+
+/// One line of a minifig's own parts inventory (torso, legs, hair, accessories).
+model MinifigPart {
+  id        String  @id @default(cuid())
+  minifigId String
+  minifig   Minifig @relation(fields: [minifigId], references: [id], onDelete: Cascade)
+
+  partNum   String
+  name      String?
+  imgUrl    String?
+  colorId   Int?
+  colorName String?
+  colorHex  String?
+  quantity  Int     @default(1)
+  isSpare   Boolean @default(false)
+  elementId String?
+
+  @@unique([minifigId, partNum, colorId, isSpare])
+  @@index([partNum])
+  @@index([minifigId])
 }
 
 /// One line of a set's parts inventory.

@@ -31,9 +31,52 @@ export interface SetSummary {
   sparePieces: number;
 }
 
+/** One minifigure that ships with a set. */
+export interface SetMinifig {
+  id: string;
+  /** Rebrickable fig number, e.g. "fig-002544". */
+  figNum: string;
+  name: string | null;
+  imgUrl: string | null;
+  quantity: number;
+}
+
 export interface SetDetail extends Omit<LegoSet, 'inventoryLines'> {
   images: SetImage[];
+  minifigs: SetMinifig[];
   summary: SetSummary;
+}
+
+/** A set one gallery minifig came out of. */
+export interface MinifigOwner {
+  setNum: string;
+  setName: string | null;
+  themeName: string | null;
+  quantity: number;
+}
+
+/** One fig on its own page: what it is, where you got it, what it is made of. */
+export interface MinifigDetail {
+  figNum: string;
+  name: string | null;
+  imgUrl: string | null;
+  /** Rebrickable's own piece count, which can differ from the cached lines. */
+  numParts: number | null;
+  partsSyncedAt: string | null;
+  /** Set when the fig's catalogue entry could not be reached. */
+  syncError: string | null;
+  totalQuantity: number;
+  sets: (MinifigOwner & { setImgUrl: string | null; year: number | null })[];
+  parts: InventoryPart[];
+}
+
+/** The same fig folded across every set that ships it. */
+export interface MinifigSummary {
+  figNum: string;
+  name: string | null;
+  imgUrl: string | null;
+  totalQuantity: number;
+  sets: MinifigOwner[];
 }
 
 export interface InventoryPart {

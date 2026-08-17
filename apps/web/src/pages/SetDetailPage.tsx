@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PartRow } from '../components/PartRow';
+import { SetArt } from '../components/SetArt';
 import { SetImageCarousel } from '../components/SetImageCarousel';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { api, errorMessage } from '../lib/api';
-import type { InventoryPart } from '../lib/types';
+import type { InventoryPart, SetMinifig } from '../lib/types';
 
 type PartSort = 'quantity' | 'name' | 'partNum' | 'color';
 
@@ -74,6 +76,12 @@ export function SetDetailPage() {
     [visible],
   );
 
+  // Counts duplicates: a set with two identical stormtroopers holds two figs, one line.
+  const figCount = useMemo(
+    () => (set?.minifigs ?? []).reduce((sum, f) => sum + f.quantity, 0),
+    [set],
+  );
+
   async function handleResync() {
     setBusy(true);
     try {
@@ -141,6 +149,7 @@ export function SetDetailPage() {
               label="Spares"
               value={summary.sparePieces > 0 ? `${summary.sparePieces} pcs` : 'none'}
             />
+            {figCount > 0 && <Fact label="Minifigs" value={figCount} />}
           </dl>
 
           <div className="detail-status">
@@ -184,6 +193,22 @@ export function SetDetailPage() {
           </div>
         </div>
       </section>
+
+      {set.minifigs.length > 0 && (
+        <section className="card">
+          <div className="section-head">
+            <h2>Minifigures</h2>
+            <span className="muted small">
+              {figCount.toLocaleString()} in this set · {set.minifigs.length} unique
+            </span>
+          </div>
+          <ul className="fig-strip">
+            {set.minifigs.map((fig) => (
+              <FigCard key={fig.id} fig={fig} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <div className="section-head">
@@ -232,47 +257,7 @@ export function SetDetailPage() {
         ) : (
           <ul className="inventory">
             {visible.map((part) => (
-              <li key={part.id} className={part.isSpare ? 'spare' : ''}>
-                <div className="inv-art">
-                  {part.imgUrl ? (
-                    <img src={part.imgUrl} alt="" loading="lazy" />
-                  ) : (
-                    <div className="tile-placeholder" aria-hidden="true" />
-                  )}
-                  <span className="inv-qty">×{part.quantity}</span>
-                </div>
-                <div className="inv-body">
-                  <div className="inv-name">{part.name ?? part.partNum}</div>
-                  <div className="inv-meta">
-                    <span className="muted">#{part.partNum}</span>
-                    {part.colorName && (
-                      <span className="inv-color">
-                        <span
-                          className="swatch"
-                          style={{ background: part.colorHex ? `#${part.colorHex}` : '#888' }}
-                        />
-                        {part.colorName}
-                      </span>
-                    )}
-                    {part.isSpare && <span className="pill pill-pending">spare</span>}
-                  </div>
-                  <div className="inv-links">
-                    <a href={part.links.rebrickable} target="_blank" rel="noreferrer">
-                      Rebrickable
-                    </a>
-                    {part.links.bricklink && (
-                      <a href={part.links.bricklink} target="_blank" rel="noreferrer">
-                        BrickLink
-                      </a>
-                    )}
-                    {part.elementId && (
-                      <span className="muted" title="LEGO element id">
-                        el {part.elementId}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </li>
+              <PartRow key={part.id} part={part} />
             ))}
           </ul>
         )}
@@ -288,6 +273,26 @@ export function SetDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+/** One fig in the set's minifig strip, linking through to the fig's own page. */
+function FigCard({ fig }: { fig: SetMinifig }) {
+  return (
+    <li>
+      <Link
+        className="fig-card"
+        to={`/minifigs/${encodeURIComponent(fig.figNum)}`}
+        title={fig.name ?? fig.figNum}
+      >
+        <div className="fig-art">
+          <SetArt url={fig.imgUrl} variant="figRow" alt={fig.name ?? fig.figNum} />
+          {fig.quantity > 1 && <span className="inv-qty">×{fig.quantity}</span>}
+        </div>
+        <span className="fig-name">{fig.name ?? fig.figNum}</span>
+        <span className="fig-num">{fig.figNum}</span>
+      </Link>
+    </li>
   );
 }
 

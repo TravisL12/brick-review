@@ -74,6 +74,12 @@ export class SetsService {
           orderBy: { sortOrder: 'asc' },
           select: { id: true, url: true, thumbUrl: true, source: true },
         },
+        // Small enough (a handful per set) to ship with the header rather than
+        // making the detail page wait on a third request.
+        minifigs: {
+          orderBy: [{ name: 'asc' }, { figNum: 'asc' }],
+          select: { id: true, figNum: true, name: true, imgUrl: true, quantity: true },
+        },
       },
     });
     if (!set) throw new NotFoundException(`Set ${setNum} is not in the collection`);
@@ -132,34 +138,7 @@ export class SetsService {
       },
     });
 
-    await this.aliases.ensureColors();
-
-    // BrickLink uses its own part and colour ids; resolve both so links land correctly.
-    const blPartIds = await this.aliases.bricklinkPartIds([
-      ...new Set(parts.map((p) => p.partNum)),
-    ]);
-    const blColorIds = await this.aliases.bricklinkColorIds([
-      ...new Set(parts.map((p) => p.colorId).filter((c): c is number => c != null)),
-    ]);
-
-    return parts.map((part) => {
-      const blPart = blPartIds.get(part.partNum);
-      const blColor = part.colorId != null ? blColorIds.get(part.colorId) : undefined;
-      return {
-        ...part,
-        bricklinkId: blPart ?? null,
-        links: {
-          // Rebrickable redirects /parts/{id}/ to its canonical slug, and ignores a
-          // colour segment, so link the plain part page.
-          rebrickable: `https://rebrickable.com/parts/${encodeURIComponent(part.partNum)}/`,
-          bricklink: blPart
-            ? `https://www.bricklink.com/v2/catalog/catalogitem.page?P=${encodeURIComponent(
-                blPart,
-              )}${blColor != null ? `&idColor=${blColor}` : ''}`
-            : null,
-        },
-      };
-    });
+    return this.aliases.decorateParts(parts);
   }
 
   async remove(setNum: string) {

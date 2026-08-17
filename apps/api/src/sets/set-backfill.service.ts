@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RebrickableService } from '../rebrickable/rebrickable.service';
 import { BricksetService } from '../brickset/brickset.service';
 import { SetImagesService } from './set-images.service';
+import { SetSyncService } from './set-sync.service';
 
 /** One-off repairs for rows written before a feature existed. All best-effort. */
 @Injectable()
@@ -14,12 +15,14 @@ export class SetBackfillService implements OnModuleInit {
     private readonly rebrickable: RebrickableService,
     private readonly brickset: BricksetService,
     private readonly images: SetImagesService,
+    private readonly sync: SetSyncService,
   ) {}
 
   /** Older rows were synced before theme names and image lists existed. */
   async onModuleInit(): Promise<void> {
     await this.backfillThemeNames();
-    // Both take minutes across a whole collection; neither may hold up boot.
+    // All three take minutes across a whole collection; none may hold up boot.
+    void this.backfillMinifigs();
     void this.backfillImages().then(() => this.warmThumbnails());
   }
 
@@ -66,6 +69,33 @@ export class SetBackfillService implements OnModuleInit {
       }
     }
     this.logger.log(`Backfilled images for ${filled} set(s)`);
+  }
+
+  /**
+   * Sets synced before minifig support never asked Rebrickable for their figs.
+   * `minifigsSyncedAt` is what tells those apart from sets that legitimately ship
+   * none, so a set with no figs is fetched once and then left alone.
+   */
+  private async backfillMinifigs(): Promise<void> {
+    if (!this.rebrickable.isConfigured()) return;
+    const stale = await this.prisma.legoSet.findMany({
+      where: { syncStatus: 'ready', minifigsSyncedAt: null },
+      select: { id: true, setNum: true },
+    });
+    if (stale.length === 0) return;
+
+    this.logger.log(`Backfilling minifigs for ${stale.length} set(s)…`);
+    let figs = 0;
+    for (const set of stale) {
+      const count = await this.sync.syncMinifigs(set.id, set.setNum);
+      if (count == null) continue;
+      await this.prisma.legoSet.update({
+        where: { id: set.id },
+        data: { minifigsSyncedAt: new Date() },
+      });
+      figs += count;
+    }
+    this.logger.log(`Backfilled ${figs} minifig line(s) across ${stale.length} set(s)`);
   }
 
   /**

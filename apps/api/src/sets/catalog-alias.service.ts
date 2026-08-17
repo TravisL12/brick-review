@@ -4,6 +4,12 @@ import { RebrickableService } from '../rebrickable/rebrickable.service';
 import { chunk } from '../common/chunk.util';
 import type { PartAliasRow } from './inventory.mapper';
 
+/** Where one inventory row can be looked up outside the app. */
+export interface PartLinks {
+  rebrickable: string;
+  bricklink: string | null;
+}
+
 /**
  * Owns the Rebrickable -> external catalogue id maps. Brickognize answers in
  * BrickLink ids and the collection is keyed by Rebrickable part numbers, so
@@ -38,6 +44,42 @@ export class CatalogAliasService {
     for (const batch of chunk(fresh)) {
       await this.prisma.partAlias.createMany({ data: batch });
     }
+  }
+
+  /**
+   * Attaches the BrickLink id and the outbound catalogue links to inventory rows.
+   * Set inventories and minifig inventories are the same shape and want the same
+   * links, so the lookup lives here rather than in either caller.
+   */
+  async decorateParts<T extends { partNum: string; colorId: number | null }>(
+    parts: T[],
+  ): Promise<(T & { bricklinkId: string | null; links: PartLinks })[]> {
+    await this.ensureColors();
+
+    // BrickLink uses its own part and colour ids; resolve both so links land correctly.
+    const blPartIds = await this.bricklinkPartIds([...new Set(parts.map((p) => p.partNum))]);
+    const blColorIds = await this.bricklinkColorIds([
+      ...new Set(parts.map((p) => p.colorId).filter((c): c is number => c != null)),
+    ]);
+
+    return parts.map((part) => {
+      const blPart = blPartIds.get(part.partNum);
+      const blColor = part.colorId != null ? blColorIds.get(part.colorId) : undefined;
+      return {
+        ...part,
+        bricklinkId: blPart ?? null,
+        links: {
+          // Rebrickable redirects /parts/{id}/ to its canonical slug, and ignores a
+          // colour segment, so link the plain part page.
+          rebrickable: `https://rebrickable.com/parts/${encodeURIComponent(part.partNum)}/`,
+          bricklink: blPart
+            ? `https://www.bricklink.com/v2/catalog/catalogitem.page?P=${encodeURIComponent(
+                blPart,
+              )}${blColor != null ? `&idColor=${blColor}` : ''}`
+            : null,
+        },
+      };
+    });
   }
 
   /** BrickLink part id per Rebrickable part number; the lowest id wins when a part has several. */

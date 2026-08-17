@@ -38,6 +38,28 @@ export interface RebrickableInventoryPart {
   num_sets?: number;
 }
 
+/**
+ * A minifig line of a set's inventory. Rebrickable treats figs as sets of their
+ * own, so the fields are set-shaped: `set_num` is the "fig-002544" id.
+ */
+export interface RebrickableSetMinifig {
+  id: number;
+  set_num: string;
+  set_name: string;
+  quantity: number;
+  set_img_url: string | null;
+}
+
+/** A fig's own catalogue entry. Set-shaped for the same reason as the line above. */
+export interface RebrickableMinifig {
+  set_num: string;
+  name: string;
+  num_parts: number;
+  set_img_url: string | null;
+  set_url: string;
+  last_modified_dt: string;
+}
+
 export interface RebrickablePage<T> {
   count: number;
   next: string | null;

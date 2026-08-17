@@ -1,8 +1,7 @@
 import type { RebrickableInventoryPart } from '../rebrickable/rebrickable.types';
 
-/** A SetPart row, ready for createMany. */
+/** One inventory row, ready for createMany once the owner id is attached. */
 export interface InventoryLine {
-  setId: string;
   partNum: string;
   name: string | null;
   imgUrl: string | null;
@@ -26,12 +25,13 @@ export interface MappedInventory {
   aliases: PartAliasRow[];
 }
 
-/** Turns a Rebrickable inventory into the rows a sync needs to store. */
-export function mapInventory(
-  setId: string,
-  inventory: RebrickableInventoryPart[],
-): MappedInventory {
-  // Collapse duplicate inventory lines — the unique key is (set, part, color, spare).
+/**
+ * Turns a Rebrickable inventory into the rows a sync needs to store. The owner —
+ * a set or a minifig — is attached by the caller, since both store the same
+ * shape against different tables.
+ */
+export function mapInventory(inventory: RebrickableInventoryPart[]): MappedInventory {
+  // Collapse duplicate inventory lines — the unique key is (owner, part, color, spare).
   const lines = new Map<string, InventoryLine>();
   const aliases = new Map<string, PartAliasRow>();
 
@@ -44,7 +44,6 @@ export function mapInventory(
       existing.quantity += entry.quantity;
     } else {
       lines.set(key, {
-        setId,
         partNum,
         name: entry.part.name ?? null,
         imgUrl: entry.part.part_img_url ?? null,

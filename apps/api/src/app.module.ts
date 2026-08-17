@@ -6,6 +6,7 @@ import { RebrickableModule } from './rebrickable/rebrickable.module';
 import { BrickognizeModule } from './brickognize/brickognize.module';
 import { BricksetModule } from './brickset/brickset.module';
 import { SetsModule } from './sets/sets.module';
+import { MinifigsModule } from './minifigs/minifigs.module';
 import { RecognitionModule } from './recognition/recognition.module';
 import { HealthController } from './common/health.controller';
 
@@ -21,6 +22,7 @@ import { HealthController } from './common/health.controller';
     BrickognizeModule,
     BricksetModule,
     SetsModule,
+    MinifigsModule,
     RecognitionModule,
   ],
   controllers: [HealthController],
