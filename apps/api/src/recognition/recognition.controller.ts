@@ -8,6 +8,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UserId } from '../auth/current-user.decorator';
 import { RecognitionService } from './recognition.service';
 import { IdentifyQueryDto, RankDto } from './dto';
 
@@ -31,9 +32,14 @@ export class RecognitionController {
       },
     }),
   )
-  identify(@UploadedFile() file: Express.Multer.File, @Query() query: IdentifyQueryDto) {
+  identify(
+    @UserId() userId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Query() query: IdentifyQueryDto,
+  ) {
     if (!file) throw new BadRequestException('No image uploaded (expected field "image")');
     return this.recognition.identify(
+      userId,
       file.buffer,
       file.originalname ?? 'capture.jpg',
       file.mimetype,
@@ -44,7 +50,7 @@ export class RecognitionController {
 
   /** Ranks owned sets against every part seen so far in a scan session. */
   @Post('rank')
-  rank(@Body() dto: RankDto) {
-    return this.recognition.rank(dto.observations);
+  rank(@UserId() userId: string, @Body() dto: RankDto) {
+    return this.recognition.rank(userId, dto.observations);
   }
 }

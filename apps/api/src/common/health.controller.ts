@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../auth/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RebrickableService } from '../rebrickable/rebrickable.service';
 
@@ -9,6 +10,8 @@ export class HealthController {
     private readonly rebrickable: RebrickableService,
   ) {}
 
+  /** Public: the sign-in page shows the API's status before anyone has a session. */
+  @Public()
   @Get()
   async health() {
     let db = true;

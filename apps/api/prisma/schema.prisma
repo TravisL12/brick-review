@@ -7,11 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// A LEGO set the user owns / has declared.
+/// A person with their own collection. Everything a user "owns" hangs off this row;
+/// the catalogue caches (Minifig, MinifigPart, PartAlias, ColorAlias) are deliberately
+/// global, because they are just a local mirror of Rebrickable and cost rate-limited
+/// requests to rebuild per account.
+model User {
+  id           String   @id @default(cuid())
+  /// Stored lower-cased; the app compares emails case-insensitively.
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  /// user | admin. The first account to register becomes admin.
+  role         String   @default("user")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sets  LegoSet[]
+  scans ScanEvent[]
+}
+
+/// A LEGO set a user owns / has declared.
 model LegoSet {
   id           String    @id @default(cuid())
-  /// Canonical Rebrickable set number, always suffixed: "10276-1"
-  setNum       String    @unique
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Canonical Rebrickable set number, always suffixed: "10276-1".
+  /// Unique per user, not globally — two people can own the same set.
+  setNum       String
   name         String?
   year         Int?
   themeId      Int?
@@ -34,6 +56,8 @@ model LegoSet {
   images   SetImage[]
   minifigs SetMinifig[]
 
+  @@unique([userId, setNum])
+  @@index([userId])
   @@index([syncStatus])
 }
 
@@ -154,6 +178,8 @@ model PartAlias {
 /// Audit trail of recognitions, so we can improve matching / send feedback later.
 model ScanEvent {
   id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   listingId   String?
   /// part | set | fig | sticker
   searchType  String
@@ -164,6 +190,7 @@ model ScanEvent {
   matchedSets String?
   createdAt   DateTime @default(now())
 
+  @@index([userId, createdAt])
   @@index([createdAt])
 }
 

@@ -1,4 +1,5 @@
 import type {
+  AuthUser,
   ImportResult,
   IdentifyResponse,
   InventoryPart,
@@ -17,6 +18,28 @@ export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Carries the HTTP status so callers can tell "signed out" from "broken". */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export function isUnauthorized(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 401;
+}
+
+/**
+ * Fired whenever the API rejects a call as unauthenticated. `AuthProvider` listens
+ * and drops back to the sign-in screen, so a session that expires while a tab is
+ * open turns into a sign-in prompt rather than an error on every page.
+ */
+export const SESSION_EXPIRED_EVENT = 'brick-review:session-expired';
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
@@ -28,55 +51,66 @@ async function handle<T>(res: Response): Promise<T> {
     } catch {
       /* keep the status-code message */
     }
-    throw new Error(message);
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+    }
+    throw new ApiError(message, res.status);
   }
   return (await res.json()) as T;
 }
 
+/**
+ * Every call goes through here so the session cookie is always sent. Same-origin
+ * in dev via the Vite proxy, but `include` keeps it working if the API is ever
+ * served from a different origin.
+ */
+function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return fetch(`${BASE}${path}`, { credentials: 'include', ...init }).then((r) => handle<T>(r));
+}
+
+function postJson<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export const api = {
-  listSets: () => fetch(`${BASE}/sets`).then((r) => handle<LegoSet[]>(r)),
+  register: (body: { email: string; password: string; displayName?: string }) =>
+    postJson<AuthUser>('/auth/register', body),
 
-  setsStats: () => fetch(`${BASE}/sets/stats`).then((r) => handle<SetsStats>(r)),
+  login: (body: { email: string; password: string }) => postJson<AuthUser>('/auth/login', body),
 
-  getSet: (setNum: string) =>
-    fetch(`${BASE}/sets/${encodeURIComponent(setNum)}`).then((r) => handle<SetDetail>(r)),
+  logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
+
+  me: () => request<AuthUser>('/auth/me'),
+
+  listSets: () => request<LegoSet[]>('/sets'),
+
+  setsStats: () => request<SetsStats>('/sets/stats'),
+
+  getSet: (setNum: string) => request<SetDetail>(`/sets/${encodeURIComponent(setNum)}`),
 
   getSetParts: (setNum: string) =>
-    fetch(`${BASE}/sets/${encodeURIComponent(setNum)}/parts`).then((r) =>
-      handle<InventoryPart[]>(r),
-    ),
+    request<InventoryPart[]>(`/sets/${encodeURIComponent(setNum)}/parts`),
 
-  listMinifigs: () => fetch(`${BASE}/minifigs`).then((r) => handle<MinifigSummary[]>(r)),
+  listMinifigs: () => request<MinifigSummary[]>('/minifigs'),
 
-  getMinifig: (figNum: string) =>
-    fetch(`${BASE}/minifigs/${encodeURIComponent(figNum)}`).then((r) => handle<MinifigDetail>(r)),
+  getMinifig: (figNum: string) => request<MinifigDetail>(`/minifigs/${encodeURIComponent(figNum)}`),
 
   resyncMinifig: (figNum: string) =>
-    fetch(`${BASE}/minifigs/${encodeURIComponent(figNum)}/resync`, { method: 'POST' }).then((r) =>
-      handle<MinifigDetail>(r),
-    ),
+    request<MinifigDetail>(`/minifigs/${encodeURIComponent(figNum)}/resync`, { method: 'POST' }),
 
-  importSets: (text: string) =>
-    fetch(`${BASE}/sets/import`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    }).then((r) => handle<ImportResult>(r)),
+  importSets: (text: string) => postJson<ImportResult>('/sets/import', { text }),
 
   removeSet: (setNum: string) =>
-    fetch(`${BASE}/sets/${encodeURIComponent(setNum)}`, { method: 'DELETE' }).then((r) =>
-      handle<{ removed: string }>(r),
-    ),
+    request<{ removed: string }>(`/sets/${encodeURIComponent(setNum)}`, { method: 'DELETE' }),
 
   resyncSet: (setNum: string) =>
-    fetch(`${BASE}/sets/${encodeURIComponent(setNum)}/resync`, { method: 'POST' }).then((r) =>
-      handle<{ queued: string }>(r),
-    ),
+    request<{ queued: string }>(`/sets/${encodeURIComponent(setNum)}/resync`, { method: 'POST' }),
 
-  retryFailed: () =>
-    fetch(`${BASE}/sets/retry-failed`, { method: 'POST' }).then((r) =>
-      handle<{ queued: number }>(r),
-    ),
+  retryFailed: () => request<{ queued: number }>('/sets/retry-failed', { method: 'POST' }),
 
   identify: (blob: Blob, opts: { searchType?: string; minScore?: number } = {}) => {
     const form = new FormData();
@@ -85,16 +119,12 @@ export const api = {
     if (opts.searchType) params.set('searchType', opts.searchType);
     if (opts.minScore != null) params.set('minScore', String(opts.minScore));
     const qs = params.toString();
-    return fetch(`${BASE}/recognition/identify${qs ? `?${qs}` : ''}`, {
+    return request<IdentifyResponse>(`/recognition/identify${qs ? `?${qs}` : ''}`, {
       method: 'POST',
       body: form,
-    }).then((r) => handle<IdentifyResponse>(r));
+    });
   },
 
   rank: (observations: { partNum: string; weight?: number }[]) =>
-    fetch(`${BASE}/recognition/rank`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ observations }),
-    }).then((r) => handle<RankResponse>(r)),
+    postJson<RankResponse>('/recognition/rank', { observations }),
 };

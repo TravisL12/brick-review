@@ -1,3 +1,12 @@
+/** The signed-in account, as returned by /api/auth/me. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  /** "user" | "admin" — the first account to register is the admin. */
+  role: string;
+}
+
 export interface LegoSet {
   id: string;
   setNum: string;

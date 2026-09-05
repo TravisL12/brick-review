@@ -20,10 +20,18 @@ export class SetBackfillService implements OnModuleInit {
 
   /** Older rows were synced before theme names and image lists existed. */
   async onModuleInit(): Promise<void> {
-    await this.backfillThemeNames();
+    await this.backfillThemeNames().catch((err: unknown) =>
+      this.logger.warn(`Theme-name backfill failed: ${String(err)}`),
+    );
     // All three take minutes across a whole collection; none may hold up boot.
-    void this.backfillMinifigs();
-    void this.backfillImages().then(() => this.warmThumbnails());
+    // Every one is detached, so every one needs its own terminal `.catch` — an
+    // unhandled rejection out here would kill the process during startup.
+    void this.backfillMinifigs().catch((err: unknown) =>
+      this.logger.warn(`Minifig backfill failed: ${String(err)}`),
+    );
+    void this.backfillImages()
+      .then(() => this.warmThumbnails())
+      .catch((err: unknown) => this.logger.warn(`Image backfill failed: ${String(err)}`));
   }
 
   private async backfillThemeNames(): Promise<void> {

@@ -484,3 +484,43 @@ ul { list-style: none; margin: 0; padding: 0; }
 
 button.danger-solid { background: var(--err); border-color: var(--err); color: #fff; }
 button.danger-solid:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* ---- Accounts ---- */
+
+/* Shown while the session check is in flight, so the app never flashes sign-in. */
+.app-boot {
+  height: 100%; display: flex; align-items: center; justify-content: center;
+}
+.app-boot .brand-stud { width: 34px; height: 34px; opacity: 0.5; }
+
+.account { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.account-name {
+  font-size: 13px; color: var(--muted); max-width: 190px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+button.link {
+  background: none; border: none; padding: 0; color: var(--accent);
+  font-size: 13px; font-weight: 500; text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer;
+}
+button.link:hover:not(:disabled) { color: var(--text); }
+
+.auth-screen {
+  min-height: 100%; display: flex; align-items: center; justify-content: center;
+  padding: 40px 20px;
+}
+.auth-card { width: 100%; max-width: 380px; }
+.auth-brand { margin-bottom: 6px; }
+.auth-tagline { margin: 0 0 20px; }
+
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-form button[type="submit"] { margin-top: 4px; padding: 11px 14px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
+.field input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; font-size: 15px; width: 100%;
+}
+
+.auth-switch { margin: 18px 0 0; text-align: center; }

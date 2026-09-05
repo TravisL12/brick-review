@@ -6,7 +6,13 @@ import { CatalogAliasService } from './catalog-alias.service';
 import { SetSyncService } from './set-sync.service';
 import type { ImportSetsDto } from './dto';
 
-/** Reads the collection for the UI; queueing and syncing live in SetSyncService. */
+/**
+ * Reads one user's collection for the UI; queueing and syncing live in SetSyncService.
+ *
+ * Every query here filters on `userId`. A set number is unique per user, not
+ * globally, so the compound `userId_setNum` key is what identifies a row — a bare
+ * `where: { setNum }` would reach into other people's collections.
+ */
 @Injectable()
 export class SetsService {
   constructor(
@@ -17,23 +23,27 @@ export class SetsService {
     private readonly sync: SetSyncService,
   ) {}
 
-  async list() {
+  async list(userId: string) {
     const sets = await this.prisma.legoSet.findMany({
+      where: { userId },
       orderBy: [{ createdAt: 'desc' }],
       include: { _count: { select: { parts: true } } },
     });
     return sets.map(({ _count, ...set }) => ({ ...set, inventoryLines: _count.parts }));
   }
 
-  async stats() {
+  async stats(userId: string) {
     const [sets, ready, pending, errored, parts] = await Promise.all([
-      this.prisma.legoSet.count(),
-      this.prisma.legoSet.count({ where: { syncStatus: 'ready' } }),
-      this.prisma.legoSet.count({ where: { syncStatus: { in: ['pending', 'syncing'] } } }),
-      this.prisma.legoSet.count({ where: { syncStatus: 'error' } }),
-      this.prisma.setPart.count(),
+      this.prisma.legoSet.count({ where: { userId } }),
+      this.prisma.legoSet.count({ where: { userId, syncStatus: 'ready' } }),
+      this.prisma.legoSet.count({
+        where: { userId, syncStatus: { in: ['pending', 'syncing'] } },
+      }),
+      this.prisma.legoSet.count({ where: { userId, syncStatus: 'error' } }),
+      this.prisma.setPart.count({ where: { set: { userId } } }),
     ]);
     const distinct = await this.prisma.setPart.findMany({
+      where: { set: { userId } },
       distinct: ['partNum'],
       select: { partNum: true },
     });
@@ -49,16 +59,16 @@ export class SetsService {
     };
   }
 
-  importSets(dto: ImportSetsDto) {
-    return this.sync.importSets(dto);
+  importSets(userId: string, dto: ImportSetsDto) {
+    return this.sync.importSets(userId, dto);
   }
 
-  resync(setNum: string) {
-    return this.sync.resync(setNum);
+  resync(userId: string, setNum: string) {
+    return this.sync.resync(userId, setNum);
   }
 
-  retryFailed() {
-    return this.sync.retryFailed();
+  retryFailed(userId: string) {
+    return this.sync.retryFailed(userId);
   }
 
   runSyncQueue(): Promise<void> {
@@ -66,9 +76,9 @@ export class SetsService {
   }
 
   /** One set with aggregate inventory figures for the detail page. */
-  async findOne(setNum: string) {
+  async findOne(userId: string, setNum: string) {
     const set = await this.prisma.legoSet.findUnique({
-      where: { setNum },
+      where: { userId_setNum: { userId, setNum } },
       include: {
         images: {
           orderBy: { sortOrder: 'asc' },
@@ -114,9 +124,9 @@ export class SetsService {
   }
 
   /** Full inventory for one set. Local SQLite, so the whole list ships at once. */
-  async findParts(setNum: string) {
+  async findParts(userId: string, setNum: string) {
     const set = await this.prisma.legoSet.findUnique({
-      where: { setNum },
+      where: { userId_setNum: { userId, setNum } },
       select: { id: true },
     });
     if (!set) throw new NotFoundException(`Set ${setNum} is not in the collection`);
@@ -141,10 +151,11 @@ export class SetsService {
     return this.aliases.decorateParts(parts);
   }
 
-  async remove(setNum: string) {
-    const set = await this.prisma.legoSet.findUnique({ where: { setNum } });
+  async remove(userId: string, setNum: string) {
+    const key = { userId_setNum: { userId, setNum } };
+    const set = await this.prisma.legoSet.findUnique({ where: key });
     if (!set) throw new NotFoundException(`Set ${setNum} is not in the collection`);
-    await this.prisma.legoSet.delete({ where: { setNum } });
+    await this.prisma.legoSet.delete({ where: key });
     return { removed: setNum };
   }
 }

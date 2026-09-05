@@ -37,8 +37,9 @@ export class MinifigsService {
    * Every minifig in the collection, folded by fig number: the same character can
    * ship in several sets, and the gallery shows it once with its origins listed.
    */
-  async list(): Promise<MinifigSummary[]> {
+  async list(userId: string): Promise<MinifigSummary[]> {
     const rows = await this.prisma.setMinifig.findMany({
+      where: { set: { userId } },
       orderBy: [{ name: 'asc' }, { figNum: 'asc' }],
       select: {
         figNum: true,
@@ -87,9 +88,9 @@ export class MinifigsService {
    * that may never be opened. It is fetched on the first view instead and cached
    * from then on — the first load of a given fig pays roughly a second.
    */
-  async findOne(figNum: string) {
+  async findOne(userId: string, figNum: string) {
     const owners = await this.prisma.setMinifig.findMany({
-      where: { figNum },
+      where: { figNum, set: { userId } },
       orderBy: { set: { setNum: 'asc' } },
       select: {
         name: true,
@@ -141,8 +142,13 @@ export class MinifigsService {
     };
   }
 
-  /** Drops the cached inventory so the next read pulls it again. */
-  async resync(figNum: string) {
+  /**
+   * Drops the cached inventory so the next read pulls it again. The cache itself is
+   * shared, so `findOne` runs first: a user who does not own the fig gets a 404
+   * instead of being able to invalidate everyone's copy of it.
+   */
+  async resync(userId: string, figNum: string) {
+    await this.findOne(userId, figNum);
     const fig = await this.prisma.minifig.findUnique({ where: { figNum } });
     if (fig) {
       await this.prisma.minifig.update({
@@ -150,7 +156,7 @@ export class MinifigsService {
         data: { partsSyncedAt: null },
       });
     }
-    return this.findOne(figNum);
+    return this.findOne(userId, figNum);
   }
 
   /**
@@ -201,10 +207,18 @@ export class MinifigsService {
     }
   }
 
-  async stats() {
+  async stats(userId: string) {
     const [lines, figs] = await Promise.all([
-      this.prisma.setMinifig.aggregate({ _sum: { quantity: true }, _count: true }),
-      this.prisma.setMinifig.findMany({ distinct: ['figNum'], select: { figNum: true } }),
+      this.prisma.setMinifig.aggregate({
+        where: { set: { userId } },
+        _sum: { quantity: true },
+        _count: true,
+      }),
+      this.prisma.setMinifig.findMany({
+        where: { set: { userId } },
+        distinct: ['figNum'],
+        select: { figNum: true },
+      }),
     ]);
     return {
       distinctFigs: figs.length,

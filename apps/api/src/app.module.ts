@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { join } from 'node:path';
 import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from './auth/auth.guard';
 import { RebrickableModule } from './rebrickable/rebrickable.module';
 import { BrickognizeModule } from './brickognize/brickognize.module';
 import { BricksetModule } from './brickset/brickset.module';
@@ -18,6 +21,7 @@ import { HealthController } from './common/health.controller';
       envFilePath: [join(__dirname, '..', '.env'), join(__dirname, '..', '..', '..', '.env')],
     }),
     PrismaModule,
+    AuthModule,
     RebrickableModule,
     BrickognizeModule,
     BricksetModule,
@@ -26,5 +30,8 @@ import { HealthController } from './common/health.controller';
     RecognitionModule,
   ],
   controllers: [HealthController],
+  // Every route requires a session unless it opts out with `@Public()`, so a new
+  // controller is private by default rather than by remembering to guard it.
+  providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })
 export class AppModule {}

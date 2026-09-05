@@ -26,6 +26,7 @@ export class RecognitionService {
   ) {}
 
   async identify(
+    userId: string,
     image: Buffer,
     filename: string,
     mimetype: string,
@@ -38,7 +39,7 @@ export class RecognitionService {
     // Brickognize speaks BrickLink ids; the collection is keyed by Rebrickable part numbers.
     const partNumsByItem = await this.resolvePartNums(items);
     const allPartNums = [...new Set([...partNumsByItem.values()].flat())];
-    const ownedByPartNum = await this.findOwnedLines(allPartNums);
+    const ownedByPartNum = await this.findOwnedLines(userId, allPartNums);
 
     const candidates = items.map((item) => {
       const partNums = partNumsByItem.get(item.id) ?? [];
@@ -65,6 +66,7 @@ export class RecognitionService {
     await this.prisma.scanEvent
       .create({
         data: {
+          userId,
           listingId: result.listing_id,
           searchType,
           candidates: JSON.stringify(items),
@@ -87,7 +89,7 @@ export class RecognitionService {
    * Ranks the user's sets against everything seen so far in a scan session.
    * Coverage answers "which set do these bricks belong to" far better than a single frame.
    */
-  async rank(observations: ObservationDto[]) {
+  async rank(userId: string, observations: ObservationDto[]) {
     const weights = new Map<string, number>();
     for (const obs of observations) {
       if (!obs.partNum) continue;
@@ -98,7 +100,7 @@ export class RecognitionService {
       return { observedParts: 0, matchedParts: 0, unmatchedParts: [], sets: [] };
     }
 
-    const ownedByPartNum = await this.findOwnedLines(partNums);
+    const ownedByPartNum = await this.findOwnedLines(userId, partNums);
     const totalWeight = [...weights.values()].reduce((a, b) => a + b, 0);
 
     const bySet = new Map<
@@ -186,13 +188,20 @@ export class RecognitionService {
     return out;
   }
 
-  /** Every owned inventory line for the given part numbers, grouped by part number. */
-  private async findOwnedLines(partNums: string[]): Promise<Map<string, OwnedLine[]>> {
+  /**
+   * Every inventory line *this user* owns for the given part numbers, grouped by
+   * part number. The `set: { userId }` filter is what keeps a scan ranking against
+   * one collection rather than everyone's.
+   */
+  private async findOwnedLines(
+    userId: string,
+    partNums: string[],
+  ): Promise<Map<string, OwnedLine[]>> {
     const out = new Map<string, OwnedLine[]>();
     if (partNums.length === 0) return out;
 
     const rows = await this.prisma.setPart.findMany({
-      where: { partNum: { in: partNums }, set: { syncStatus: 'ready' } },
+      where: { partNum: { in: partNums }, set: { userId, syncStatus: 'ready' } },
       include: { set: { select: { setNum: true, name: true, imgUrl: true } } },
       orderBy: { quantity: 'desc' },
     });

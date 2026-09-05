@@ -7,6 +7,9 @@ build/
 .DS_Store
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
+# WAL mode sidecars (see PrismaService)
+apps/api/prisma/*.db-wal
+apps/api/prisma/*.db-shm
 apps/web/dist/
 .vite/
 *.tsbuildinfo

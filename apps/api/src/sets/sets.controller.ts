@@ -1,48 +1,50 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { UserId } from '../auth/current-user.decorator';
 import { SetsService } from './sets.service';
 import { ImportSetsDto } from './dto';
 
+/** Every route here is scoped to the signed-in user's own collection. */
 @Controller('sets')
 export class SetsController {
   constructor(private readonly sets: SetsService) {}
 
   @Get()
-  list() {
-    return this.sets.list();
+  list(@UserId() userId: string) {
+    return this.sets.list(userId);
   }
 
   @Get('stats')
-  stats() {
-    return this.sets.stats();
+  stats(@UserId() userId: string) {
+    return this.sets.stats(userId);
   }
 
   @Get(':setNum')
-  findOne(@Param('setNum') setNum: string) {
-    return this.sets.findOne(setNum);
+  findOne(@UserId() userId: string, @Param('setNum') setNum: string) {
+    return this.sets.findOne(userId, setNum);
   }
 
   @Get(':setNum/parts')
-  findParts(@Param('setNum') setNum: string) {
-    return this.sets.findParts(setNum);
+  findParts(@UserId() userId: string, @Param('setNum') setNum: string) {
+    return this.sets.findParts(userId, setNum);
   }
 
   @Post('import')
-  import(@Body() dto: ImportSetsDto) {
-    return this.sets.importSets(dto);
+  import(@UserId() userId: string, @Body() dto: ImportSetsDto) {
+    return this.sets.importSets(userId, dto);
   }
 
   @Post('retry-failed')
-  retryFailed() {
-    return this.sets.retryFailed();
+  retryFailed(@UserId() userId: string) {
+    return this.sets.retryFailed(userId);
   }
 
   @Post(':setNum/resync')
-  resync(@Param('setNum') setNum: string) {
-    return this.sets.resync(setNum);
+  resync(@UserId() userId: string, @Param('setNum') setNum: string) {
+    return this.sets.resync(userId, setNum);
   }
 
   @Delete(':setNum')
-  remove(@Param('setNum') setNum: string) {
-    return this.sets.remove(setNum);
+  remove(@UserId() userId: string, @Param('setNum') setNum: string) {
+    return this.sets.remove(userId, setNum);
   }
 }
