@@ -28,29 +28,29 @@ model User {
 
 /// A LEGO set a user owns / has declared.
 model LegoSet {
-  id           String    @id @default(cuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Canonical Rebrickable set number, always suffixed: "10276-1".
   /// Unique per user, not globally — two people can own the same set.
-  setNum       String
-  name         String?
-  year         Int?
-  themeId      Int?
-  themeName    String?
-  numParts     Int?
-  imgUrl       String?
+  setNum           String
+  name             String?
+  year             Int?
+  themeId          Int?
+  themeName        String?
+  numParts         Int?
+  imgUrl           String?
   /// Brickset's internal numeric set id, cached so image syncs skip the lookup call.
-  bricksetId   Int?
+  bricksetId       Int?
   /// pending | syncing | ready | error
-  syncStatus   String    @default("pending")
-  syncError    String?
-  lastSyncedAt DateTime?
+  syncStatus       String    @default("pending")
+  syncError        String?
+  lastSyncedAt     DateTime?
   /// When the minifig list was last pulled. Null means "never asked", which is what
   /// separates a set with genuinely no minifigs from one synced before they existed.
   minifigsSyncedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   parts    SetPart[]
   images   SetImage[]
@@ -64,9 +64,9 @@ model LegoSet {
 /// One picture of a set. The Rebrickable box shot is sortOrder 0; Brickset's
 /// additional images (alternate angles, build shots) follow.
 model SetImage {
-  id     String  @id @default(cuid())
-  setId  String
-  set    LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  id    String  @id @default(cuid())
+  setId String
+  set   LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
 
   /// Full-resolution image URL.
   url       String
@@ -103,17 +103,17 @@ model SetMinifig {
 /// page is opened. `SetMinifig` stays the "which sets ship it" join; this holds
 /// what Rebrickable knows about the fig itself.
 model Minifig {
-  id        String    @id @default(cuid())
+  id            String    @id @default(cuid())
   /// Rebrickable fig number, e.g. "fig-002544"
-  figNum    String    @unique
-  name      String?
-  imgUrl    String?
-  numParts  Int?
+  figNum        String    @unique
+  name          String?
+  imgUrl        String?
+  numParts      Int?
   /// When the fig's own parts inventory was pulled. Null means never, which is
   /// what makes the first page view fetch it and later ones read the cache.
   partsSyncedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   parts MinifigPart[]
 }
@@ -141,9 +141,9 @@ model MinifigPart {
 
 /// One line of a set's parts inventory.
 model SetPart {
-  id        String  @id @default(cuid())
-  setId     String
-  set       LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  id    String  @id @default(cuid())
+  setId String
+  set   LegoSet @relation(fields: [setId], references: [id], onDelete: Cascade)
 
   /// Rebrickable part number, e.g. "3001"
   partNum   String
@@ -203,4 +203,26 @@ model ColorAlias {
   rgb         String?
   bricklinkId Int?
   updatedAt   DateTime @updatedAt
+}
+
+/// A well-known set shown on the signed-out splash screen.
+///
+/// Deliberately its own table rather than a query over `LegoSet`: the splash is
+/// public, and picking images out of the collection would leak whatever sets a
+/// real account happens to own to anybody who loads the sign-in page. These rows
+/// are pure Rebrickable catalogue data belonging to nobody, refreshed from a
+/// curated list of set numbers hard-coded in SplashService.
+model ShowcaseSet {
+  /// Canonical Rebrickable set number, e.g. "75192-1"
+  setNum    String   @id
+  name      String?
+  year      Int?
+  themeName String?
+  numParts  Int?
+  imgUrl    String?
+  /// Position in the curated list, so the splash renders in a stable order.
+  sortOrder Int      @default(0)
+  fetchedAt DateTime @default(now())
+
+  @@index([sortOrder])
 }

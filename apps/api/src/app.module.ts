@@ -11,6 +11,7 @@ import { BricksetModule } from './brickset/brickset.module';
 import { SetsModule } from './sets/sets.module';
 import { MinifigsModule } from './minifigs/minifigs.module';
 import { RecognitionModule } from './recognition/recognition.module';
+import { SplashModule } from './splash/splash.module';
 import { HealthController } from './common/health.controller';
 
 @Module({
@@ -28,6 +29,7 @@ import { HealthController } from './common/health.controller';
     SetsModule,
     MinifigsModule,
     RecognitionModule,
+    SplashModule,
   ],
   controllers: [HealthController],
   // Every route requires a session unless it opts out with `@Public()`, so a new

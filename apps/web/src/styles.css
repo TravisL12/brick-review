@@ -506,13 +506,94 @@ button.link {
 }
 button.link:hover:not(:disabled) { color: var(--text); }
 
-.auth-screen {
-  min-height: 100%; display: flex; align-items: center; justify-content: center;
-  padding: 40px 20px;
+/* ---- Signed-out splash ---- */
+
+.splash {
+  position: relative; min-height: 100%; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 48px 24px 0;
 }
-.auth-card { width: 100%; max-width: 380px; }
-.auth-brand { margin-bottom: 6px; }
-.auth-tagline { margin: 0 0 20px; }
+
+/*
+ * The set-art wall. Sits behind everything at low opacity with a vignette over
+ * it, so the artwork reads as texture and the form keeps its contrast.
+ */
+.splash-mosaic {
+  position: absolute; inset: -6% -2%; z-index: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;
+  opacity: 0.5; filter: saturate(0.9);
+  pointer-events: none;
+}
+@media (min-width: 900px) {
+  .splash-mosaic { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* Two columns of art is plenty on a phone, and a third would only reflow into a
+   second row and fight the drift animation. */
+@media (max-width: 899px) {
+  .mosaic-col:nth-child(n + 3) { display: none; }
+}
+.splash-mosaic.is-empty { opacity: 0; }
+
+.mosaic-col { display: flex; flex-direction: column; gap: 18px; will-change: transform; }
+.mosaic-col img {
+  width: 100%; aspect-ratio: 5 / 4; object-fit: contain;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px;
+}
+
+/* The two columns drift past each other. Each list is duplicated in the markup,
+   so translating by exactly -50% lands on the copy and the loop is seamless. */
+.mosaic-col { animation: mosaic-drift 90s linear infinite; }
+.mosaic-col-1, .mosaic-col-3 { animation-direction: reverse; }
+@keyframes mosaic-drift {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-50%); }
+}
+/* Motion is decorative; honour a request to stop it. */
+@media (prefers-reduced-motion: reduce) {
+  .mosaic-col { animation: none; }
+}
+
+/* Darkens the artwork towards the middle so the card and copy stay legible. */
+.splash::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(15,17,23,0.93) 0%, rgba(15,17,23,0.80) 42%, rgba(15,17,23,0.42) 100%),
+    linear-gradient(to bottom, var(--bg) 0%, rgba(15,17,23,0) 18%, rgba(15,17,23,0) 82%, var(--bg) 100%);
+}
+
+.splash-content {
+  position: relative; z-index: 2;
+  width: 100%; max-width: 1000px; margin: 0 auto;
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, 380px);
+  gap: 56px; align-items: center;
+}
+@media (max-width: 880px) {
+  .splash { justify-content: flex-start; padding-top: 40px; }
+  .splash-content { grid-template-columns: 1fr; gap: 32px; max-width: 420px; }
+}
+
+.splash-pitch .brand { margin-bottom: 22px; }
+.splash-headline {
+  margin: 0 0 14px; font-size: 34px; line-height: 1.15;
+  letter-spacing: -0.02em; font-weight: 650;
+}
+.splash-headline em { color: var(--accent); font-style: normal; }
+.splash-sub { margin: 0 0 24px; color: var(--muted); font-size: 15px; max-width: 46ch; }
+
+.splash-points { display: flex; flex-direction: column; gap: 12px; max-width: 46ch; }
+.splash-points li {
+  position: relative; padding-left: 22px; color: var(--muted); font-size: 14px; line-height: 1.5;
+}
+.splash-points li::before {
+  content: ''; position: absolute; left: 0; top: 7px;
+  width: 10px; height: 10px; border-radius: 3px; background: var(--accent);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25);
+}
+.splash-points strong { color: var(--text); font-weight: 600; }
+
+.auth-card { box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+.auth-title { margin: 0 0 18px; font-size: 18px; }
 
 .auth-form { display: flex; flex-direction: column; gap: 14px; }
 .auth-form button[type="submit"] { margin-top: 4px; padding: 11px 14px; }
@@ -524,3 +605,9 @@ button.link:hover:not(:disabled) { color: var(--text); }
 }
 
 .auth-switch { margin: 18px 0 0; text-align: center; }
+
+.splash-footer {
+  position: relative; z-index: 2;
+  margin: 40px auto 0; padding-bottom: 24px;
+  max-width: 1000px; text-align: center; color: var(--muted); opacity: 0.75;
+}

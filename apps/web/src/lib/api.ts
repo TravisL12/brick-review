@@ -9,6 +9,7 @@ import type {
   RankResponse,
   SetDetail,
   SetsStats,
+  ShowcaseSet,
 } from './types';
 
 const BASE = '/api';
@@ -85,6 +86,9 @@ export const api = {
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
 
   me: () => request<AuthUser>('/auth/me'),
+
+  /** Public — the splash screen's artwork, available before anyone signs in. */
+  splashSets: () => request<ShowcaseSet[]>('/splash/sets'),
 
   listSets: () => request<LegoSet[]>('/sets'),
 

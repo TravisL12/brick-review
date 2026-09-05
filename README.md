@@ -58,6 +58,24 @@ yarn workspace @brick-review/api seed:demo --clear    # remove them
 
 The sets land in the oldest account unless you name one with `--email=you@example.com`.
 
+## The signed-out splash
+
+Visitors who are not signed in get a splash screen: the pitch, the sign-in form, and a
+drifting mosaic of set photography behind them.
+
+That artwork comes from `ShowcaseSet`, a small table of hand-picked catalogue sets
+refreshed from Rebrickable, **not** from anyone's collection. The distinction matters:
+`/api/splash/sets` is `@Public()` by necessity, so rendering real `LegoSet` rows there
+would tell any anonymous visitor exactly which sets the account holders own.
+
+The cache is warmed once at boot and refreshed monthly. The endpoint itself is a pure
+database read and never triggers an upstream fetch, so reloading the sign-in page cannot
+be used to occupy the shared Rebrickable throttle. With no API key configured the table
+stays empty, the endpoint returns `[]`, and the splash simply renders without artwork.
+
+To change which sets appear, edit `SHOWCASE_SET_NUMS` in
+`apps/api/src/splash/splash.service.ts` and restart.
+
 ## Accounts
 
 Registration is open: anyone who can reach the app can create an account, and the first
@@ -125,13 +143,14 @@ Camera access needs a secure context: `localhost` works as-is, any other host ne
 ```
 apps/api    NestJS + Prisma + SQLite
   auth/          accounts, session cookie, globally applied guard
+  splash/        curated showcase sets for the signed-out screen
   sets/          bulk import, background inventory sync worker
   rebrickable/   API client, serialised at ~1 req/s (they ban for abuse)
   brickognize/   API client, serialised and throttled so live scan can't firehose
   recognition/   part -> owned-set matching and session ranking
 apps/web    Vite + React + TypeScript
   auth/AuthContext.tsx      session state; the app renders behind it
-  pages/SignInPage.tsx      sign in / create account
+  pages/SignInPage.tsx      signed-out splash: pitch, set-art mosaic, sign in / register
   pages/SetsGalleryPage.tsx  tiled collection gallery
   pages/SetsAddPage.tsx     bulk import + sync management
   pages/SetDetailPage.tsx   one set, with searchable piece inventory
@@ -150,6 +169,7 @@ scoped to the signed-in account.
 | `POST` | `/api/auth/login` | `{ email, password }` — sets the session cookie |
 | `POST` | `/api/auth/logout` | clears the session cookie |
 | `GET` | `/api/auth/me` | the signed-in account |
+| `GET` | `/api/splash/sets` | curated catalogue sets for the signed-out splash (public) |
 | `GET` | `/api/sets` | collection with sync status |
 | `GET` | `/api/sets/stats` | counts, incl. whether the Rebrickable key is set |
 | `GET` | `/api/sets/:setNum` | one set plus aggregate inventory summary |
@@ -169,6 +189,12 @@ The schema is versioned in `apps/api/prisma/migrations/`. Change `schema.prisma`
 yarn db:migrate               # dev: generates a migration, applies it, regenerates the client
 yarn db:deploy                # deployed: applies pending migrations, generates nothing
 ```
+
+**Stop the API first.** Prisma's schema engine wants an exclusive lock on the database,
+which a running API holds open even in WAL mode — leave `yarn dev` up and the command
+fails with `database is locked`. Note that `nest start --watch` will not restart a process
+it did not stop itself, so after killing the API, touch a file under `apps/api/src` to make
+the watcher rebuild and respawn it.
 
 **Do not use `yarn db:push` on a database with real collections in it.** It diffs the
 schema straight onto the database with no migration file and no review step, and when a

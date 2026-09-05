@@ -1,3 +1,12 @@
+/** A curated catalogue set shown on the signed-out splash. Never a user's own set. */
+export interface ShowcaseSet {
+  setNum: string;
+  name: string | null;
+  year: number | null;
+  themeName: string | null;
+  imgUrl: string | null;
+}
+
 /** The signed-in account, as returned by /api/auth/me. */
 export interface AuthUser {
   id: string;
