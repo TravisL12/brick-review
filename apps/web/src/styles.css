@@ -173,6 +173,19 @@ ul { list-style: none; margin: 0; padding: 0; }
 .seg button:hover { color: var(--text); }
 .seg button.active { background: var(--panel-2); color: var(--text); }
 
+/* Colour filter between the This brick / Session toggle and the set list. */
+.color-filter { margin: 0 0 14px; }
+.color-filter-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+}
+.color-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+button.color-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; font-size: 13px; border-radius: 999px;
+}
+button.color-chip.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+button.color-chip .swatch { width: 12px; height: 12px; border-radius: 3px; }
+
 .ranked-list { display: flex; flex-direction: column; gap: 10px; }
 .ranked-list li {
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;

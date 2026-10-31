@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CameraCapture } from '../components/CameraCapture';
 import { SetArt } from '../components/SetArt';
@@ -25,6 +25,27 @@ export function ScanPage() {
 
   /** The right-hand panel shows either the current brick's sets or the running session tally. */
   const [view, setView] = useState<'brick' | 'session'>('brick');
+
+  /**
+   * Colours picked in the filter. Empty means every colour is included. The pick
+   * survives new scans (live scan re-reads the same brick), but only colours the
+   * current brick actually comes in take part in the filter.
+   */
+  const [pickedColors, setPickedColors] = useState<Set<string>>(new Set());
+  const colorOptions = useMemo(() => brickColorOptions(result?.setMatches ?? []), [result]);
+  const activeColors = colorOptions.filter((c) => pickedColors.has(c.key)).map((c) => c.key);
+  const visibleMatches =
+    result && activeColors.length > 0
+      ? result.setMatches.filter((m) => m.matches.some((x) => activeColors.includes(colorKey(x))))
+      : (result?.setMatches ?? []);
+
+  const toggleColor = (key: string) =>
+    setPickedColors((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const box = result?.boundingBox;
   const overlay = box
@@ -155,6 +176,15 @@ export function ScanPage() {
           </button>
         </div>
 
+        {view === 'brick' && colorOptions.length > 1 && (
+          <ColorFilter
+            options={colorOptions}
+            active={activeColors}
+            onToggle={toggleColor}
+            onReset={() => setPickedColors(new Set())}
+          />
+        )}
+
         {view === 'brick' ? (
           !result ? (
             <p className="muted">
@@ -165,7 +195,7 @@ export function ScanPage() {
             <p className="muted">This brick is not in any of your synced sets.</p>
           ) : (
             <ul className="ranked-list">
-              {result.setMatches.map((m) => (
+              {visibleMatches.map((m) => (
                 <RankedSetRow
                   key={m.setNum}
                   setNum={m.setNum}
@@ -269,6 +299,90 @@ function RankedSetRow({
         </div>
       </Link>
     </li>
+  );
+}
+
+interface ColorOption {
+  key: string;
+  name: string;
+  hex: string | null;
+  /** How many of the matched sets carry this brick in this colour. */
+  sets: number;
+}
+
+const UNKNOWN_COLOR = 'Unknown colour';
+
+function colorKey(match: SetMatch['matches'][number]): string {
+  return match.colorName ?? UNKNOWN_COLOR;
+}
+
+/** Every colour this brick comes in across the matched sets, most common first. */
+function brickColorOptions(setMatches: SetMatch[]): ColorOption[] {
+  const byColor = new Map<string, ColorOption>();
+  for (const set of setMatches) {
+    const seen = new Set<string>();
+    for (const m of set.matches) {
+      const key = colorKey(m);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const entry = byColor.get(key);
+      if (entry) entry.sets += 1;
+      else byColor.set(key, { key, name: key, hex: m.colorHex, sets: 1 });
+    }
+  }
+  return [...byColor.values()].sort((a, b) => b.sets - a.sets || a.name.localeCompare(b.name));
+}
+
+/**
+ * Narrows "This brick" to the sets that have it in the colour you are holding.
+ * Nothing picked means every colour counts; picking colours keeps only sets
+ * that carry the brick in at least one of them.
+ */
+function ColorFilter({
+  options,
+  active,
+  onToggle,
+  onReset,
+}: {
+  options: ColorOption[];
+  active: string[];
+  onToggle: (key: string) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="color-filter">
+      <div className="color-filter-head">
+        <span className="muted small">
+          {active.length === 0
+            ? 'Filter by colour — all included'
+            : `${active.length} colour${active.length === 1 ? '' : 's'} selected`}
+        </span>
+        <button className="link small" onClick={onReset} disabled={active.length === 0}>
+          Reset
+        </button>
+      </div>
+      <div className="color-chips">
+        {options.map((c) => {
+          const on = active.includes(c.key);
+          return (
+            <button
+              key={c.key}
+              className={`color-chip${on ? ' active' : ''}`}
+              aria-pressed={on}
+              onClick={() => onToggle(c.key)}
+              title={`${c.name} — in ${c.sets} set${c.sets === 1 ? '' : 's'}`}
+            >
+              <span
+                className="swatch"
+                style={{ background: c.hex ? `#${c.hex}` : 'transparent' }}
+              />
+              {c.name}
+              <span className="muted">{c.sets}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
